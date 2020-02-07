@@ -4,11 +4,11 @@ from concurrent import futures
 import json
 import grpc
 
-import action_pb2
-import action_pb2_grpc
+import carta_script_pb2
+import carta_script_pb2_grpc
 
 
-class CartaDummyServer(carta_scripting_pb2_grpc.ActionServicer):
+class CartaDummyServer(carta_script_pb2_grpc.CartaScriptServicer):
 
     def CallAction(self, request, context):
         success = True
@@ -29,12 +29,12 @@ class CartaDummyServer(carta_scripting_pb2_grpc.ActionServicer):
             message = "Parameter array is not valid JSON: {}".format(e)
             print(message)
         
-        return carta_scripting_pb2.ActionReply(success=success, message=message, response=response)
+        return carta_script_pb2.ActionReply(success=success, message=message, response=response)
 
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    carta_scripting_pb2_grpc.add_ActionServicer_to_server(CartaDummyServer(), server)
+    carta_script_pb2_grpc.add_CartaScriptServicer_to_server(CartaDummyServer(), server)
     server.add_insecure_port('[::]:50051')
     server.start()
     server.wait_for_termination()

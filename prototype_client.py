@@ -2,14 +2,14 @@
 
 import grpc
 import json
-import action_pb2
-import action_pb2_grpc
+import carta_script_pb2
+import carta_script_pb2_grpc
 
 def run():
     with grpc.insecure_channel('localhost:50051') as channel:
-        stub = carta_scripting_pb2_grpc.ActionStub(channel)
+        stub = carta_script_pb2_grpc.CartaScriptStub(channel)
         response = stub.CallAction(
-            carta_scripting_pb2.ActionRequest(
+            carta_script_pb2.ActionRequest(
                 session_id="12345",
                 path="",
                 action="openFile",
