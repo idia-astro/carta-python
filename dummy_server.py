@@ -9,11 +9,11 @@ import carta_script_pb2_grpc
 
 
 class CartaDummyServer(carta_script_pb2_grpc.CartaScriptServicer):
-
+    # TODO: add some realistic responses for different actions
     def CallAction(self, request, context):
         success = True
         message = ""
-        response = ""
+        response = json.dumps({"foo": "bar"})
                 
         try:
             parsed_params = json.loads(request.parameters)
