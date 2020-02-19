@@ -10,7 +10,7 @@ def run():
         stub = carta_script_pb2_grpc.CartaScriptStub(channel)
         response = stub.CallAction(
             carta_script_pb2.ActionRequest(
-                session_id="12345",
+                session_id=12345,
                 path="",
                 action="openFile",
                 parameters=json.dumps(["", "foobar.fits", ""]),
