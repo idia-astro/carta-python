@@ -3,6 +3,7 @@
 import json
 import logging
 import posixpath
+import argparse
 
 import grpc
 
@@ -81,6 +82,7 @@ class Image:
         response = self.session.call_action("", "openFile", dirname, filename, hdu)
         # TODO: and then what? do we get back an ID for this file?
         #self.file_id = response["id"]
+        # TODO we probably need to save some properties
         # TODO: how to set render mode in the frontend?
 
     def get_rendered_image(self):
@@ -106,6 +108,12 @@ class Image:
 
 
 if __name__ == '__main__':
-    # TODO: when this is actually hooked up, we should pass the session parameters in with argparse
-    session = connect("localhost", 50051, 12345, True)
-    image = session.open_file("/foo/bar/baz/myimage.fits")
+    parser = argparse.ArgumentParser(description='A basic test of the prototype client.')
+    parser.add_argument('--host', help='Server host', default="localhost")
+    parser.add_argument('--port', help='Server port', type=int, default=50051)
+    parser.add_argument('--session', help='Session ID', type=int, required=True)
+    parser.add_argument('--image', help='Image name', required=True)
+    args = parser.parse_args()
+
+    session = connect(args.host, args.port, args.session, True)
+    image = session.open_file(args.image)
