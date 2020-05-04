@@ -33,7 +33,7 @@ def connect(host, port, session_id, debug=False):
 
 class Session:
     def __init__(self, host, port, session_id, debug=False):
-        self.log = logging.getLogger("carta_serviceing")
+        self.log = logging.getLogger("carta_scripting")
         self.log.setLevel(logging.DEBUG if debug else logging.ERROR)
         
         self.uri = "%s:%s" % (host, port)
