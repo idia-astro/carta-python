@@ -6,11 +6,11 @@ import posixpath
 
 import grpc
 
-import carta_script_pb2
-import carta_script_pb2_grpc
+import carta_service_pb2
+import carta_service_pb2_grpc
 
 
-class CartaScriptingException(Exception):
+class CartaBackendingException(Exception):
     pass
 
 
@@ -33,7 +33,7 @@ def connect(host, port, session_id, debug=False):
 
 class Session:
     def __init__(self, host, port, session_id, debug=False):
-        self.log = logging.getLogger("carta_scripting")
+        self.log = logging.getLogger("carta_serviceing")
         self.log.setLevel(logging.DEBUG if debug else logging.ERROR)
         
         self.uri = "%s:%s" % (host, port)
@@ -46,9 +46,9 @@ class Session:
         parameters = json.dumps(args)
         
         with grpc.insecure_channel(self.uri) as channel:
-            stub = carta_script_pb2_grpc.CartaScriptStub(channel)
+            stub = carta_service_pb2_grpc.CartaBackendStub(channel)
             response = stub.CallAction(
-                carta_script_pb2.ActionRequest(
+                carta_service_pb2.ActionRequest(
                     session_id=self.session_id,
                     path=path,
                     action=action,
@@ -60,12 +60,12 @@ class Session:
         self.log.debug("Got success status: %s; message: %s; response: %s", response.success, response.message, response.response)
         
         if not response.success:
-            raise CartaScriptingException("CARTA scripting action failed: %s", response.message)
+            raise CartaBackendingException("CARTA scripting action failed: %s", response.message)
                 
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaScriptingException("Failed to decode CARTA action response.\nResponse string: %r\nError: %s", response.response, e)
+            raise CartaBackendingException("Failed to decode CARTA action response.\nResponse string: %r\nError: %s", response.response, e)
         
         return decoded_response
 
