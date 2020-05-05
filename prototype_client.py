@@ -22,6 +22,11 @@ class RenderMode:
 # TODO: these are placeholders; we should actually get these from the frontend when we create the session object.
 class Colormap:
     AFMHOT, BLUES, COOLWARM, CUBEHELIX, GIST_HEAT, GIST_STERN, GNUPLOT, GNUPLOT2, GRAY, GREENS, GREYS, HOT, INFERNO, JET, MAGMA, NIPY_SPECTRAL, PLASMA, RAINBOW, RDBU, RDGY, REDS, SEISMIC, SPECTRAL, TAB10, VIRIDIS = range(25)
+    
+    #@staticmethod
+    #def initialise(session):
+        #response = session.call_action("", "fetchParameter", "RenderConfigStore.COLOR_MAPS_SELECTED")
+        #print(response)
 
     
 class DirectionRefFrame:
@@ -40,6 +45,7 @@ class Session:
         
         self.uri = "%s:%s" % (host, port)
         self.session_id = session_id
+        self.images = []
         
     def call_action(self, path, action, *args, **kwargs):
         self.log.debug("Sending action request to backend; path: %s; action: %s; args: %s, kwargs: %s", path, action, args, kwargs)
@@ -72,20 +78,24 @@ class Session:
         return decoded_response
 
     def open_file(self, path, hdu="", render_mode=RenderMode.RASTER):
-        return Image(self, path, hdu, render_mode)
+        return Image(self, path, hdu, False, render_mode)
+
+    def append_file(self, path, hdu="", render_mode=RenderMode.RASTER):
+        return Image(self, path, hdu, True, render_mode)
         
 
 class Image:
-    def __init__(self, session, path, hdu, render_mode):
+    def __init__(self, session, path, hdu, append, render_mode):
         self.session = session
         self.path = path
         
         dirname, filename = posixpath.split(path)
-        response = self.session.call_action("", "openFile", dirname, filename, hdu)
+        open_function = "appendFile" if append else "openFile"
+
+        response = self.session.call_action("", open_function, dirname, filename, hdu)
         
-        # TODO: and then what? do we get back an ID for this file?
-        #self.file_id = response["id"]
-        # TODO we probably need to save some properties
+        self.session.images.append(self)
+        self.file_id = response
         # TODO: how to set render mode in the frontend?
         
     def call_action(self):
@@ -122,7 +132,16 @@ if __name__ == '__main__':
     parser.add_argument('--port', help='Server port', type=int, default=50051)
     parser.add_argument('--session', help='Session ID', type=int, required=True)
     parser.add_argument('--image', help='Image name', required=True)
+    parser.add_argument('--append', help='Append image', action='store_true')
+    
     args = parser.parse_args()
 
     session = connect(args.host, args.port, args.session, True)
-    image = session.open_file(args.image)
+    
+    #print("COLORMAP")
+    
+    #Colormap.initialise(session)
+    
+    print("OPEN FILE")
+    
+    image = session.append_file(args.image) if args.append else session.open_file(args.image)
