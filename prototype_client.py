@@ -78,7 +78,7 @@ class Session:
 class Image:
     def __init__(self, session, path, hdu, render_mode):
         self.session = session
-        self.path = 
+        self.path = path
         
         dirname, filename = posixpath.split(path)
         response = self.session.call_action("", "openFile", dirname, filename, hdu)
@@ -113,7 +113,7 @@ class Image:
         pass # TODO
     
     def close(self):
-        pass # invalidate yourself
+        pass # close file on the frontend and invalidate yourself
 
 
 if __name__ == '__main__':
