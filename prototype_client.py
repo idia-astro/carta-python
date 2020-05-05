@@ -11,7 +11,7 @@ import carta_service_pb2
 import carta_service_pb2_grpc
 
 
-class CartaBackendingException(Exception):
+class CartaScriptingException(Exception):
     pass
 
 
@@ -36,6 +36,7 @@ class Session:
     def __init__(self, host, port, session_id, debug=False):
         self.log = logging.getLogger("carta_scripting")
         self.log.setLevel(logging.DEBUG if debug else logging.ERROR)
+        self.log.addHandler(logging.StreamHandler())
         
         self.uri = "%s:%s" % (host, port)
         self.session_id = session_id
@@ -61,12 +62,12 @@ class Session:
         self.log.debug("Got success status: %s; message: %s; response: %s", response.success, response.message, response.response)
         
         if not response.success:
-            raise CartaBackendingException("CARTA scripting action failed: %s", response.message)
+            raise CartaScriptingException("CARTA scripting action failed: %s", response.message)
                 
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaBackendingException("Failed to decode CARTA action response.\nResponse string: %r\nError: %s", response.response, e)
+            raise CartaScriptingException("Failed to decode CARTA action response.\nResponse string: %r\nError: %s", response.response, e)
         
         return decoded_response
 
@@ -77,13 +78,18 @@ class Session:
 class Image:
     def __init__(self, session, path, hdu, render_mode):
         self.session = session
+        self.path = 
         
         dirname, filename = posixpath.split(path)
         response = self.session.call_action("", "openFile", dirname, filename, hdu)
+        
         # TODO: and then what? do we get back an ID for this file?
         #self.file_id = response["id"]
         # TODO we probably need to save some properties
         # TODO: how to set render mode in the frontend?
+        
+    def call_action(self):
+        pass # TODO; this forwards file-specific requests and handles errors like the file being closed
 
     def get_rendered_image(self):
         pass # TODO
@@ -105,6 +111,9 @@ class Image:
 
     def set_view(self, x_min, x_max, y_min, y_max):
         pass # TODO
+    
+    def close(self):
+        pass # invalidate yourself
 
 
 if __name__ == '__main__':
