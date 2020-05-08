@@ -4,6 +4,7 @@ import json
 import logging
 import posixpath
 import argparse
+import base64
 
 import grpc
 
@@ -101,8 +102,8 @@ class Session:
         macro = Macro('.'.join(parts[:-1]), parts[-1])
         return self.call_action("", "fetchParameter", macro)
     
-    def image(self, file_id, file_name):
-        return Image(self, file_id, file_name)
+    def image(self, image_id, file_name):
+        return Image(self, image_id, file_name)
 
     def open_image(self, path, hdu="", render_mode=RenderMode.RASTER):
         return Image.new(self, path, hdu, False, render_mode)
@@ -112,32 +113,55 @@ class Session:
 
     def image_list(self):
         return [self.image(f["value"], f["label"]) for f in self.fetch_parameter("frameNames")]
+    
+    def active_frame(self):
+        frame_info = self.fetch_parameter("activeFrame.frameInfo")
+        image_id = frame_info["fileId"]
+        file_name = frame_info["fileInfo"]["name"]
+        return self.image(image_id, file_name)
+    
+    def set_active_frame(self, image_id):
+        self.call_action("", "setActiveFrame", image_id)
+    
+    def rendered_view_url(self, background_color=None):
+        args = ["", "getImageDataUrl"]
+        if background_color:
+            args.append(background_color)
+        return self.call_action(*args)
+    
+    def rendered_view_data(self, background_color=None):
+        uri = self.rendered_view_url(background_color)
+        data = uri.split(",")[1]
+        return base64.b64decode(data)
+    
+    def save_rendered_view(self, file_name, background_color=None):
+        with open(file_name, 'wb') as f:
+            f.write(self.rendered_view_data(background_color))
 
-# TODO: transparently cache immutable values on the image object
 
 class Image:    
-    def __init__(self, session, file_id, file_name):
+    def __init__(self, session, image_id, file_name):
         self.session = session
-        self.file_id = file_id
+        self.image_id = image_id
         self.file_name = file_name
     
     @classmethod
     def new(cls, session, path, hdu, append, render_mode):
         # TODO: how to set render mode in the frontend?
         directory, file_name = posixpath.split(path)
-        file_id = session.call_action("", "appendFile" if append else "openFile", directory, file_name, hdu)
+        image_id = session.call_action("", "appendFile" if append else "openFile", directory, file_name, hdu)
         
-        return cls(session, file_id, file_name)
+        return cls(session, image_id, file_name)
         
     def __repr__(self):
-        return f"{self.session.session_id}:{self.file_id}:{self.file_name}"
+        return f"{self.session.session_id}:{self.image_id}:{self.file_name}"
     
     def call_action(self, path, action, *args, **kwargs):
-        return self.session.call_action(f"frameMap[{self.file_id}].{path}", action, *args, **kwargs)
+        return self.session.call_action(f"frameMap[{self.image_id}].{path}", action, *args, **kwargs)
     
     def fetch_parameter(self, path):
-        return self.session.fetch_parameter(f"frameMap[{self.file_id}].{path}")
-    
+        return self.session.fetch_parameter(f"frameMap[{self.image_id}].{path}")
+
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
     
@@ -147,20 +171,20 @@ class Image:
     def shape(self):
         info = self.fetch_parameter("frameInfo.fileInfoExtended")
         return list(reversed([info["width"], info["height"], info["depth"], info["stokes"]][:info["dimensions"]]))
-        
-    def get_rendered_image(self):
-        pass # TODO
-
-    def save(self):
-        pass # TODO
-
+    
+    def set_active(self):
+        self.session.set_active_frame(self.image_id)
+    
     def set_coordinate_system(self, direction_ref_frame=DirectionRefFrame.AUTO):
         pass # TODO
  
     def show_grid(self, show=False):
         pass # TODO
 
-    def set_channel_stokes(self, channel, stokes):
+    def set_channel(self, channel):
+        pass # TODO
+
+    def set_stokes(self, stokes):
         pass # TODO
 
     def set_colormap(self, colormap):
@@ -170,7 +194,7 @@ class Image:
         pass # TODO
     
     def close(self):
-        self.session.call_action("", "closeFile", Macro("", f"frameMap[{self.file_id}]"))
+        self.session.call_action("", "closeFile", Macro("", f"frameMap[{self.image_id}]"))
 
 
 if __name__ == '__main__':
