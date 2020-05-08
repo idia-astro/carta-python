@@ -111,7 +111,7 @@ class Session:
         return Image.new(self, path, hdu, True, render_mode)
 
     def image_list(self):
-        return {f["value"]: image(f["value"]) for f in self.fetch_parameter("frameNames")}
+        return {f["value"]: self.image(f["value"]) for f in self.fetch_parameter("frameNames")}
 
 # TODO: transparently cache immutable values on the image object
 
