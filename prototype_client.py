@@ -101,8 +101,8 @@ class Session:
         macro = Macro('.'.join(parts[:-1]), parts[-1])
         return self.call_action("", "fetchParameter", macro)
     
-    def image(self, file_id):
-        return Image(self, file_id)
+    def image(self, file_id, file_name):
+        return Image(self, file_id, file_name)
 
     def open_image(self, path, hdu="", render_mode=RenderMode.RASTER):
         return Image.new(self, path, hdu, False, render_mode)
@@ -111,14 +111,15 @@ class Session:
         return Image.new(self, path, hdu, True, render_mode)
 
     def image_list(self):
-        return {f["value"]: self.image(f["value"]) for f in self.fetch_parameter("frameNames")}
+        return {f["value"]: self.image(f["value"], f["label"]) for f in self.fetch_parameter("frameNames")}
 
 # TODO: transparently cache immutable values on the image object
 
 class Image:    
-    def __init__(self, session, file_id):
+    def __init__(self, session, file_id, file_name):
         self.session = session
-        self.file_id = file_id        
+        self.file_id = file_id
+        self.file_name = file_name
     
     @classmethod
     def new(cls, session, path, hdu, append, render_mode):
@@ -126,10 +127,10 @@ class Image:
         directory, file_name = posixpath.split(path)
         file_id = session.call_action("", "appendFile" if append else "openFile", directory, file_name, hdu)
         
-        return cls(session, file_id)
+        return cls(session, file_id, file_name)
         
     def __repr__(self):
-        return f"Image(session_id={self.session.session_id}, file_id={self.file_id})"
+        return f"{self.session.session_id}:{self.file_id}:{self.file_name}"
     
     def call_action(self, path, action, *args, **kwargs):
         return self.session.call_action(f"frameMap[{self.file_id}].{path}", action, *args, **kwargs)
@@ -139,9 +140,6 @@ class Image:
     
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
-    
-    def name(self):
-        return self.fetch_parameter("frameInfo.fileInfo.name")
     
     def header(self):
         return self.fetch_parameter("frameInfo.fileInfoExtended.headerEntries")
