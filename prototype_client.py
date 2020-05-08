@@ -120,8 +120,11 @@ class Session:
         file_name = frame_info["fileInfo"]["name"]
         return self.image(image_id, file_name)
     
-    def set_active_frame(self, image_id):
-        self.call_action("", "setActiveFrame", image_id)
+    def clear_spatial_reference(self):
+        self.call_action("", "clearSpatialReference")
+    
+    def clear_spectral_reference(self):
+        self.call_action("", "clearSpectralReference")
     
     def rendered_view_url(self, background_color=None):
         args = ["", "getImageDataUrl"]
@@ -144,6 +147,9 @@ class Image:
         self.session = session
         self.image_id = image_id
         self.file_name = file_name
+        
+        self._base_path = f"frameMap[{image_id}]"
+        self._frame = Macro("", self._base_path)
     
     @classmethod
     def new(cls, session, path, hdu, append, render_mode):
@@ -156,11 +162,14 @@ class Image:
     def __repr__(self):
         return f"{self.session.session_id}:{self.image_id}:{self.file_name}"
     
+    def _resolve_path(self, path):
+        return f"{self._base_path}.{path}" if path else self._base_path
+    
     def call_action(self, path, action, *args, **kwargs):
-        return self.session.call_action(f"frameMap[{self.image_id}].{path}", action, *args, **kwargs)
+        return self.session.call_action(self._resolve_path(path), action, *args, **kwargs)
     
     def fetch_parameter(self, path):
-        return self.session.fetch_parameter(f"frameMap[{self.image_id}].{path}")
+        return self.session.fetch_parameter(self._resolve_path(path))
 
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
@@ -172,8 +181,20 @@ class Image:
         info = self.fetch_parameter("frameInfo.fileInfoExtended")
         return list(reversed([info["width"], info["height"], info["depth"], info["stokes"]][:info["dimensions"]]))
     
-    def set_active(self):
-        self.session.set_active_frame(self.image_id)
+    def make_active(self):
+        self.session.call_action("", "setActiveFrame", self._frame)
+        
+    def make_spatial_reference(self):
+        self.session.call_action("", "setSpatialReference", self._frame)
+        
+    def set_spatial_matching(self, state):
+        self.session.call_action("", "setSpatialMatchingEnabled", self._frame, state)
+        
+    def make_spectral_reference(self):
+        self.session.call_action("", "setSpectralReference", self._frame)
+        
+    def set_spectral_matching(self, state):
+        self.session.call_action("", "setSpectralMatchingEnabled", self._frame, state)
     
     def set_coordinate_system(self, direction_ref_frame=DirectionRefFrame.AUTO):
         pass # TODO
@@ -181,11 +202,10 @@ class Image:
     def show_grid(self, show=False):
         pass # TODO
 
-    def set_channel(self, channel):
-        pass # TODO
-
-    def set_stokes(self, stokes):
-        pass # TODO
+    def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
+        channel = channel or self.fetch_parameter("requiredChannel")
+        stokes = stokes or self.fetch_parameter("requiredStokes")
+        self.call_action("", "setChannels", channel, stokes, recursive)
 
     def set_colormap(self, colormap):
         self.call_action("renderConfig", "setColorMapIndex", colormap)
@@ -194,7 +214,7 @@ class Image:
         pass # TODO
     
     def close(self):
-        self.session.call_action("", "closeFile", Macro("", f"frameMap[{self.image_id}]"))
+        self.session.call_action("", "closeFile", self._frame)
 
 
 if __name__ == '__main__':
