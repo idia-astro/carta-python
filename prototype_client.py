@@ -200,7 +200,7 @@ class Image:
         pass # TODO
  
     def show_grid(self, show=False):
-        pass # TODO
+        pass # TODO this and a bunch of other overlay options
 
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
@@ -210,8 +210,11 @@ class Image:
     def set_colormap(self, colormap):
         self.call_action("renderConfig", "setColorMapIndex", colormap)
 
-    def set_view(self, x_min, x_max, y_min, y_max):
-        pass # TODO
+    def set_center(self, x, y):
+        self.call_action("", "setCenter", x, y)
+        
+    def set_zoom(self, zoom, absolute=True):
+        self.call_action("", "setZoom", zoom, absolute)
     
     def close(self):
         self.session.call_action("", "closeFile", self._frame)
