@@ -5,6 +5,7 @@ import logging
 import posixpath
 import argparse
 import base64
+import time
 
 import grpc
 
@@ -215,6 +216,8 @@ class Image:
         
     def set_zoom(self, zoom, absolute=True):
         self.call_action("", "setZoom", zoom, absolute)
+        while(self.fetch_parameter("zooming")):
+            time.sleep(0.1)
     
     def close(self):
         self.session.call_action("", "closeFile", self._frame)
