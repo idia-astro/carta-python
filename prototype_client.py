@@ -150,6 +150,9 @@ class Session:
     
     def clear_spectral_reference(self):
         self.call_action("", "clearSpectralReference")
+        
+    def set_view_area(self, width, height):
+        self.call_action("overlayStore", "setViewDimension", width, height)
     
     def set_coordinate_system(self, system=CoordinateSystem.AUTO):
         self.call_action("overlayStore.global", "setSystem", system)
