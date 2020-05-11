@@ -37,6 +37,7 @@ class CartaEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+# TODO: I don't think contours work like this anymore.
 class RenderMode:
     RASTER, CONTOUR = range(2)
 
@@ -51,10 +52,34 @@ class Colormap:
         for i, colormap in enumerate(response):
             setattr(cls, colormap.upper(), i)
 
+
+class CoordinateSystem:
+    pass
+
+for system in ("Auto", "Ecliptic", "FK4", "FK5", "Galactic", "ICRS"):
+    setattr(CoordinateSystem, system.upper(), system)
+
+
+class LabelType:
+    INTERNAL = "Internal"
+    EXTERNAL = "External"
+
+
+class BeamType:
+    OPEN = "Open"
+    SOLID = "Solid"
+
+
+class Color:
+    BLACK, WHITE, RED, GREEN, BLUE, TURQUOISE, VIOLET, GOLD, GRAY = range(9)
+
+
+class Overlay:
+    pass
+
+for component in ("global", "title", "grid", "border", "ticks", "axes", "numbers", "labels", "beam"):
+    setattr(Overlay, component.upper(), component)
     
-class DirectionRefFrame:
-    # TODO: load these dynamically
-    AUTO, ECLIPTIC, FK4, FK5, GALACTIC, ICRS = range(6)
 
 class Session:    
     def __init__(self, host, port, session_id):
@@ -126,7 +151,38 @@ class Session:
     def clear_spectral_reference(self):
         self.call_action("", "clearSpectralReference")
     
+    def set_coordinate_system(self, system=CoordinateSystem.AUTO):
+        self.call_action("overlayStore.global", "setSystem", system)
+        
+    def set_label_type(self, label_type):
+        self.call_action("overlayStore.global", "setLabelType", label_type)
+        
+    def set_color(self, color, component=Overlay.GLOBAL):
+        self.call_action(f"overlayStore.{component}", "setColor", color)
+        
+    def set_custom_color(self, component, custom_color_on=True):
+        if component != Overlay.GLOBAL:
+            self.call_action(f"overlayStore.{component}", "setCustomColor", custom_color_on)
+ 
+    def set_visible(self, component, visible):
+        if component == Overlay.TICKS:
+            logger.warn("Ticks cannot be shown or hidden.")
+            return
+
+        if component != Overlay.GLOBAL:
+            self.call_action(f"overlayStore.{component}", "setVisible", visible)
+    
+    def show(self, component):
+        self.set_visible(component, True)
+ 
+    def hide(self, component):
+        self.set_visible(component, False)
+            
+    def toggle_labels(self):
+        self.call_action("overlayStore", "toggleLabels")
+    
     def rendered_view_url(self, background_color=None):
+        self.call_action("", "waitForImageData")
         args = ["", "getImageDataUrl"]
         if background_color:
             args.append(background_color)
@@ -195,12 +251,6 @@ class Image:
         
     def set_spectral_matching(self, state):
         self.session.call_action("", "setSpectralMatchingEnabled", self._frame, state)
-    
-    def set_coordinate_system(self, direction_ref_frame=DirectionRefFrame.AUTO):
-        pass # TODO
- 
-    def show_grid(self, show=False):
-        pass # TODO this and a bunch of other overlay options
 
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
