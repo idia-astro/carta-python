@@ -5,7 +5,7 @@ This is a prototype of a scripting interface which uses a generic gRPC service i
 
 Until the corresponding CARTA repository branches have been merged into `dev`, please use the following:
 
-* For `carta-backend`: `confluence/generic_scripting`. Run the backend executable with a `-grpc_port` parameter. The value should match what you supply to the client below.
+* For `carta-backend`: `confluence/generic_scripting`. Run the backend executable with a `-grpc_port` parameter. The value should match the port value that you supply to the client below.
 * For `carta-protobuf`: `angus/generic_scripting`
 * For `carta-frontend`: `angus/test_debug_execution`
 
