@@ -37,11 +37,6 @@ class CartaEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-# TODO: I don't think contours work like this anymore.
-class RenderMode:
-    RASTER, CONTOUR = range(2)
-
-
 class Colormap:
     # TODO at the moment this data can only be fetched if a file is open
     # But we can store the constants in an independent place somewhere
@@ -49,8 +44,8 @@ class Colormap:
     def fetch(cls, session):
         response = session.fetch_parameter("activeFrame.renderConfig.constructor.COLOR_MAPS_ALL")
         
-        for i, colormap in enumerate(response):
-            setattr(cls, colormap.upper(), i)
+        for colormap in response:
+            setattr(cls, colormap.upper(), colormap)
 
 
 class CoordinateSystem:
@@ -79,12 +74,29 @@ class Overlay:
 
 for component in ("global", "title", "grid", "border", "ticks", "axes", "numbers", "labels", "beam"):
     setattr(Overlay, component.upper(), component)
+
+    
+class SmoothingMode:
+    NO_SMOOTHING, BLOCK_AVERAGE, GAUSSIAN_BLUR = range(3)
     
 
+class ContourDashMode:
+    NONE = "None"
+    DASHED = "Dashed"
+    NEGATIVE_ONLY = "NegativeOnly"
+
+    
+# TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
+# TODO: histograms
+# TODO: preferences -- generic get and set for now
+# TODO: regions
+# TODO: refactor into nodes which know their own paths; keep images separate
+
 class Session:    
-    def __init__(self, host, port, session_id):
+    def __init__(self, host, port, session_id, browser=None):
         self.uri = "%s:%s" % (host, port)
-        self.session_id = session_id        
+        self.session_id = session_id
+        self._browser = browser
         
     def __repr__(self):
         return f"Session(session_id={self.session_id}, uri={self.uri})"
@@ -127,14 +139,16 @@ class Session:
         macro = Macro('.'.join(parts[:-1]), parts[-1])
         return self.call_action("", "fetchParameter", macro)
     
+    # IMAGES
+    
     def image(self, image_id, file_name):
         return Image(self, image_id, file_name)
 
-    def open_image(self, path, hdu="", render_mode=RenderMode.RASTER):
-        return Image.new(self, path, hdu, False, render_mode)
+    def open_image(self, path, hdu=""):
+        return Image.new(self, path, hdu, False)
 
-    def append_image(self, path, hdu="", render_mode=RenderMode.RASTER):
-        return Image.new(self, path, hdu, True, render_mode)
+    def append_image(self, path, hdu=""):
+        return Image.new(self, path, hdu, True)
 
     def image_list(self):
         return [self.image(f["value"], f["label"]) for f in self.fetch_parameter("frameNames")]
@@ -151,6 +165,8 @@ class Session:
     def clear_spectral_reference(self):
         self.call_action("", "clearSpectralReference")
         
+    # CANVAS AND OVERLAY
+        
     def set_view_area(self, width, height):
         self.call_action("overlayStore", "setViewDimension", width, height)
     
@@ -162,10 +178,12 @@ class Session:
         
     def set_color(self, color, component=Overlay.GLOBAL):
         self.call_action(f"overlayStore.{component}", "setColor", color)
-        
-    def set_custom_color(self, component, custom_color_on=True):
         if component != Overlay.GLOBAL:
-            self.call_action(f"overlayStore.{component}", "setCustomColor", custom_color_on)
+            self.call_action(f"overlayStore.{component}", "setCustomColor", True)
+        
+    def clear_color(self, component):
+        if component != Overlay.GLOBAL:
+            self.call_action(f"overlayStore.{component}", "setCustomColor", False)
  
     def set_visible(self, component, visible):
         if component == Overlay.TICKS:
@@ -183,6 +201,13 @@ class Session:
             
     def toggle_labels(self):
         self.call_action("overlayStore", "toggleLabels")
+    
+    # PROFILES (TODO)
+    
+    def set_cursor(self, x, y):
+        self.active_frame().call_action("regionSet.regions[0]", "setControlPoint", 0, [x, y])
+    
+    # SAVE IMAGE
     
     def rendered_view_url(self, background_color=None):
         self.call_action("", "waitForImageData")
@@ -211,8 +236,7 @@ class Image:
         self._frame = Macro("", self._base_path)
     
     @classmethod
-    def new(cls, session, path, hdu, append, render_mode):
-        # TODO: how to set render mode in the frontend?
+    def new(cls, session, path, hdu, append):
         directory, file_name = posixpath.split(path)
         image_id = session.call_action("", "appendFile" if append else "openFile", directory, file_name, hdu)
         
@@ -229,6 +253,8 @@ class Image:
     
     def fetch_parameter(self, path):
         return self.session.fetch_parameter(self._resolve_path(path))
+    
+    # METADATA
 
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
@@ -239,6 +265,8 @@ class Image:
     def shape(self):
         info = self.fetch_parameter("frameInfo.fileInfoExtended")
         return list(reversed([info["width"], info["height"], info["depth"], info["stokes"]][:info["dimensions"]]))
+    
+    # SELECTION
     
     def make_active(self):
         self.session.call_action("", "setActiveFrame", self._frame)
@@ -255,19 +283,79 @@ class Image:
     def set_spectral_matching(self, state):
         self.session.call_action("", "setSpectralMatchingEnabled", self._frame, state)
 
+    # NAVIGATION
+
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
         stokes = stokes or self.fetch_parameter("requiredStokes")
         self.call_action("", "setChannels", channel, stokes, recursive)
-
-    def set_colormap(self, colormap):
-        self.call_action("renderConfig", "setColorMapIndex", colormap)
 
     def set_center(self, x, y):
         self.call_action("", "setCenter", x, y)
         
     def set_zoom(self, zoom, absolute=True):
         self.call_action("", "setZoom", zoom, absolute)
+        
+    # STYLE
+
+    def set_colormap(self, colormap):
+        self.call_action("renderConfig", "setColorMap", colormap)
+        
+    def set_visible(self, state):
+        self.call_action("renderConfig", "setVisible", state)
+    
+    # CONTOURS
+    
+    def configure_contours(self, levels, smoothing_mode=SmoothingMode.GAUSSIAN_BLUR, smoothing_factor=4):
+        self.call_action("contourConfig", "setContourConfiguration", levels, smoothing_mode, smoothing_factor)
+    
+    def set_contour_dash(self, dash_mode=None, thickness=None):
+        if dash_mode is not None:
+            self.call_action("contourConfig", "setDashMode", dash_mode)
+        if thickness is not None:
+            self.call_action("contourConfig", "setThickness", thickness)
+    
+    def set_contour_color(self, color):
+        self.call_action("contourConfig", "setColor", color)
+        self.call_action("contourConfig", "setColorMapEnabled", False)
+    
+    def set_contour_colormap(self, colormap, bias=None, contrast=None):
+        self.call_action("contourConfig", "setColorMap", colormap)
+        self.call_action("contourConfig", "setColorMapEnabled", True)
+        if bias is not None:
+            self.call_action("contourConfig", "setColorMapBias", bias)
+        if contrast is not None:
+            self.call_action("contourConfig", "setColorMapContrast", contrast)
+    
+    def apply_contours(self):
+        self.call_action("", "applyContours")
+    
+    def clear_contours(self):
+        self.call_action("", "clearContours", True)
+    
+    def set_contours_visible(self, state):
+        self.call_action("contourConfig", "setVisible", state)
+    
+    def show_contours(self):
+        self.set_contours_visible(True)
+        
+    def hide_contours(self):
+        self.set_contours_visible(False)
+    
+    # HISTOGRAM (TODO)
+    
+    def use_cube_histogram(self, contours=False):
+        func = f"setUseCubeHistogram{"Contours" if contours else ""}"
+            self.callAction("renderConfig", func, True)
+    
+    def use_channel_histogram(self, contours=False):
+        func = f"setUseCubeHistogram{"Contours" if contours else ""}"
+            self.callAction("renderConfig", func, False)
+            
+    def set_percentile_rank(self, rank):
+        self.call_action("renderConfig", "setPercentileRank", rank)
+    
+    # CLOSE
     
     def close(self):
         self.session.call_action("", "closeFile", self._frame)
