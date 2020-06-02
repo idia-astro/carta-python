@@ -5,11 +5,7 @@ This is a prototype of a scripting interface which uses a generic gRPC service i
 
 It depends on the `grpcio` and `grpcio-tools` libraries, which you should install with `pip`. See the [gRPC Python Quick Start instructions](https://grpc.io/docs/quickstart/python/) for more detailed information.
 
-Until the corresponding CARTA repository branches have been merged into `dev`, please use the following:
-
-* For `carta-backend`: `confluence/generic_scripting`. Run the backend executable with a `-grpc_port` parameter. The value should match the `port` value that you supply to the client below.
-* For `carta-protobuf`: `angus/generic_scripting`
-* For `carta-frontend`: `angus/test_debug_execution`
+Please use the `dev` branches of `carta-backend`, `carta-protobuf` and `carta-frontend`.
 
 To generate the `pb2` files, run the script provided:
 

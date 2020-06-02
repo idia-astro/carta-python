@@ -90,7 +90,7 @@ class ContourDashMode:
 # TODO: histograms
 # TODO: preferences -- generic get and set for now
 # TODO: regions
-# TODO: refactor into nodes which know their own paths; keep images separate
+# TODO: refactor into nodes which know their own paths?
 
 class Session:    
     def __init__(self, host, port, session_id, browser=None):
