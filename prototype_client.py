@@ -34,6 +34,9 @@ class CartaEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Macro):
             return {"macroTarget" : obj.target, "macroVariable" : obj.variable}
+        if type(obj).__module__ == "numpy" and type(obj).__name__ == "ndarray":
+            # The condition is a workaround to avoid importing numpy
+            return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
 
@@ -321,15 +324,15 @@ class Image:
     
     def set_contour_color(self, color):
         self.call_action("contourConfig.setColor", color)
-        self.call_action("contourConfig.setColorMapEnabled", False)
+        self.call_action("contourConfig.setColormapEnabled", False)
     
     def set_contour_colormap(self, colormap, bias=None, contrast=None):
-        self.call_action("contourConfig.setColorMap", colormap)
-        self.call_action("contourConfig.setColorMapEnabled", True)
+        self.call_action("contourConfig.setColormap", colormap)
+        self.call_action("contourConfig.setColormapEnabled", True)
         if bias is not None:
-            self.call_action("contourConfig.setColorMapBias", bias)
+            self.call_action("contourConfig.setColormapBias", bias)
         if contrast is not None:
-            self.call_action("contourConfig.setColorMapContrast", contrast)
+            self.call_action("contourConfig.setColormapContrast", contrast)
     
     def apply_contours(self):
         self.call_action("applyContours")
