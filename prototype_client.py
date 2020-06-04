@@ -90,7 +90,8 @@ class ContourDashMode:
 # TODO: histograms
 # TODO: preferences -- generic get and set for now
 # TODO: regions
-# TODO: refactor into nodes which know their own paths?
+# TODO: add docstrings and autogenerate documentation
+
 
 class Session:    
     def __init__(self, host, port, session_id, browser=None):
@@ -100,8 +101,14 @@ class Session:
         
     def __repr__(self):
         return f"Session(session_id={self.session_id}, uri={self.uri})"
+    
+    def split_path(self, path):
+        parts = path.split('.')
+        return '.'.join(parts[:-1]), parts[-1]
         
-    def call_action(self, path, action, *args, **kwargs):
+    def call_action(self, path, *args, **kwargs):
+        path, action = self.split_path(path)
+        
         logger.debug("Sending action request to backend; path: %s; action: %s; args: %s, kwargs: %s", path, action, args, kwargs)
         
         # I don't think this can fail
@@ -135,19 +142,19 @@ class Session:
         return decoded_response
 
     def fetch_parameter(self, path):
-        parts = path.split('.')
-        macro = Macro('.'.join(parts[:-1]), parts[-1])
-        return self.call_action("", "fetchParameter", macro)
+        path, parameter = self.split_path(path)
+        macro = Macro(path, parameter)
+        return self.call_action("fetchParameter", macro)
     
     # IMAGES
     
     def image(self, image_id, file_name):
         return Image(self, image_id, file_name)
 
-    def open_image(self, path, hdu=""):
+    def open_image(self, path, hdu="0"):
         return Image.new(self, path, hdu, False)
 
-    def append_image(self, path, hdu=""):
+    def append_image(self, path, hdu="0"):
         return Image.new(self, path, hdu, True)
 
     def image_list(self):
@@ -160,30 +167,30 @@ class Session:
         return self.image(image_id, file_name)
     
     def clear_spatial_reference(self):
-        self.call_action("", "clearSpatialReference")
+        self.call_action("clearSpatialReference")
     
     def clear_spectral_reference(self):
-        self.call_action("", "clearSpectralReference")
+        self.call_action("clearSpectralReference")
         
     # CANVAS AND OVERLAY
         
     def set_view_area(self, width, height):
-        self.call_action("overlayStore", "setViewDimension", width, height)
+        self.call_action("overlayStore.setViewDimension", width, height)
     
     def set_coordinate_system(self, system=CoordinateSystem.AUTO):
-        self.call_action("overlayStore.global", "setSystem", system)
+        self.call_action("overlayStore.global.setSystem", system)
         
     def set_label_type(self, label_type):
-        self.call_action("overlayStore.global", "setLabelType", label_type)
+        self.call_action("overlayStore.global.setLabelType", label_type)
         
     def set_color(self, color, component=Overlay.GLOBAL):
-        self.call_action(f"overlayStore.{component}", "setColor", color)
+        self.call_action(f"overlayStore.{component}.setColor", color)
         if component != Overlay.GLOBAL:
-            self.call_action(f"overlayStore.{component}", "setCustomColor", True)
+            self.call_action(f"overlayStore.{component}.setCustomColor", True)
         
     def clear_color(self, component):
         if component != Overlay.GLOBAL:
-            self.call_action(f"overlayStore.{component}", "setCustomColor", False)
+            self.call_action(f"overlayStore.{component}.setCustomColor", False)
  
     def set_visible(self, component, visible):
         if component == Overlay.TICKS:
@@ -191,7 +198,7 @@ class Session:
             return
 
         if component != Overlay.GLOBAL:
-            self.call_action(f"overlayStore.{component}", "setVisible", visible)
+            self.call_action(f"overlayStore.{component}.setVisible", visible)
     
     def show(self, component):
         self.set_visible(component, True)
@@ -200,18 +207,18 @@ class Session:
         self.set_visible(component, False)
             
     def toggle_labels(self):
-        self.call_action("overlayStore", "toggleLabels")
+        self.call_action("overlayStore.toggleLabels")
     
     # PROFILES (TODO)
     
     def set_cursor(self, x, y):
-        self.active_frame().call_action("regionSet.regions[0]", "setControlPoint", 0, [x, y])
+        self.active_frame().call_action("regionSet.regions[0].setControlPoint", 0, [x, y])
     
     # SAVE IMAGE
     
     def rendered_view_url(self, background_color=None):
-        self.call_action("", "waitForImageData")
-        args = ["", "getImageDataUrl"]
+        self.call_action("waitForImageData")
+        args = ["getImageDataUrl"]
         if background_color:
             args.append(background_color)
         return self.call_action(*args)
@@ -238,21 +245,18 @@ class Image:
     @classmethod
     def new(cls, session, path, hdu, append):
         directory, file_name = posixpath.split(path)
-        image_id = session.call_action("", "appendFile" if append else "openFile", directory, file_name, hdu)
+        image_id = session.call_action("appendFile" if append else "openFile", directory, file_name, hdu)
         
         return cls(session, image_id, file_name)
         
     def __repr__(self):
         return f"{self.session.session_id}:{self.image_id}:{self.file_name}"
     
-    def _resolve_path(self, path):
-        return f"{self._base_path}.{path}" if path else self._base_path
-    
-    def call_action(self, path, action, *args, **kwargs):
-        return self.session.call_action(self._resolve_path(path), action, *args, **kwargs)
+    def call_action(self, path, *args, **kwargs):
+        return self.session.call_action(f"{self._base_path}.{path}", *args, **kwargs)
     
     def fetch_parameter(self, path):
-        return self.session.fetch_parameter(self._resolve_path(path))
+        return self.session.fetch_parameter(f"{self._base_path}.{path}")
     
     # METADATA
 
@@ -269,72 +273,72 @@ class Image:
     # SELECTION
     
     def make_active(self):
-        self.session.call_action("", "setActiveFrame", self._frame)
+        self.session.call_action("setActiveFrame", self._frame)
         
     def make_spatial_reference(self):
-        self.session.call_action("", "setSpatialReference", self._frame)
+        self.session.call_action("setSpatialReference", self._frame)
         
     def set_spatial_matching(self, state):
-        self.session.call_action("", "setSpatialMatchingEnabled", self._frame, state)
+        self.session.call_action("setSpatialMatchingEnabled", self._frame, state)
         
     def make_spectral_reference(self):
-        self.session.call_action("", "setSpectralReference", self._frame)
+        self.session.call_action("setSpectralReference", self._frame)
         
     def set_spectral_matching(self, state):
-        self.session.call_action("", "setSpectralMatchingEnabled", self._frame, state)
+        self.session.call_action("setSpectralMatchingEnabled", self._frame, state)
 
     # NAVIGATION
 
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
         stokes = stokes or self.fetch_parameter("requiredStokes")
-        self.call_action("", "setChannels", channel, stokes, recursive)
+        self.call_action("setChannels", channel, stokes, recursive)
 
     def set_center(self, x, y):
-        self.call_action("", "setCenter", x, y)
+        self.call_action("setCenter", x, y)
         
     def set_zoom(self, zoom, absolute=True):
-        self.call_action("", "setZoom", zoom, absolute)
+        self.call_action("setZoom", zoom, absolute)
         
     # STYLE
 
     def set_colormap(self, colormap):
-        self.call_action("renderConfig", "setColorMap", colormap)
+        self.call_action("renderConfig.setColorMap", colormap)
         
     def set_visible(self, state):
-        self.call_action("renderConfig", "setVisible", state)
+        self.call_action("renderConfig.setVisible", state)
     
     # CONTOURS
     
     def configure_contours(self, levels, smoothing_mode=SmoothingMode.GAUSSIAN_BLUR, smoothing_factor=4):
-        self.call_action("contourConfig", "setContourConfiguration", levels, smoothing_mode, smoothing_factor)
+        self.call_action("contourConfig.setContourConfiguration", levels, smoothing_mode, smoothing_factor)
     
     def set_contour_dash(self, dash_mode=None, thickness=None):
         if dash_mode is not None:
-            self.call_action("contourConfig", "setDashMode", dash_mode)
+            self.call_action("contourConfig.setDashMode", dash_mode)
         if thickness is not None:
-            self.call_action("contourConfig", "setThickness", thickness)
+            self.call_action("contourConfig.setThickness", thickness)
     
     def set_contour_color(self, color):
-        self.call_action("contourConfig", "setColor", color)
-        self.call_action("contourConfig", "setColorMapEnabled", False)
+        self.call_action("contourConfig.setColor", color)
+        self.call_action("contourConfig.setColorMapEnabled", False)
     
     def set_contour_colormap(self, colormap, bias=None, contrast=None):
-        self.call_action("contourConfig", "setColorMap", colormap)
-        self.call_action("contourConfig", "setColorMapEnabled", True)
+        self.call_action("contourConfig.setColorMap", colormap)
+        self.call_action("contourConfig.setColorMapEnabled", True)
         if bias is not None:
-            self.call_action("contourConfig", "setColorMapBias", bias)
+            self.call_action("contourConfig.setColorMapBias", bias)
         if contrast is not None:
-            self.call_action("contourConfig", "setColorMapContrast", contrast)
+            self.call_action("contourConfig.setColorMapContrast", contrast)
     
     def apply_contours(self):
-        self.call_action("", "applyContours")
+        self.call_action("applyContours")
     
     def clear_contours(self):
-        self.call_action("", "clearContours", True)
+        self.call_action("clearContours", True)
     
     def set_contours_visible(self, state):
-        self.call_action("contourConfig", "setVisible", state)
+        self.call_action("contourConfig.setVisible", state)
     
     def show_contours(self):
         self.set_contours_visible(True)
@@ -345,20 +349,18 @@ class Image:
     # HISTOGRAM (TODO)
     
     def use_cube_histogram(self, contours=False):
-        func = f"setUseCubeHistogram{"Contours" if contours else ""}"
-            self.callAction("renderConfig", func, True)
+        self.call_action(f"renderConfig.setUseCubeHistogram{'Contours' if contours else ''}", True)
     
     def use_channel_histogram(self, contours=False):
-        func = f"setUseCubeHistogram{"Contours" if contours else ""}"
-            self.callAction("renderConfig", func, False)
+        self.call_action(f"renderConfig.setUseCubeHistogram{'Contours' if contours else ''}", False)
             
     def set_percentile_rank(self, rank):
-        self.call_action("renderConfig", "setPercentileRank", rank)
+        self.call_action("renderConfig.setPercentileRank", rank)
     
     # CLOSE
     
     def close(self):
-        self.session.call_action("", "closeFile", self._frame)
+        self.session.call_action("closeFile", self._frame)
 
 
 if __name__ == '__main__':
