@@ -384,6 +384,6 @@ if __name__ == '__main__':
     image.set_colormap(Colormap.VIRIDIS)
     
     logger.info(f"Image shape is {image.shape()}")
-    logger.info(f"Image name is {image.name()}")
+    logger.info(f"Image name is {image.file_name}")
             
     #image.close()
