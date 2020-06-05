@@ -5,6 +5,7 @@ import logging
 import posixpath
 import argparse
 import base64
+import re
 
 import grpc
 
@@ -322,8 +323,14 @@ class Image:
         if "min" in kwargs and "max" in kwargs:
             self.call_action("renderConfig.setCustomScale", kwargs["min"], kwargs["max"])
         
-    def set_visible(self, state):
+    def set_raster_visible(self, state):
         self.call_action("renderConfig.setVisible", state)
+        
+    def show_raster(self):
+        self.set_raster_visible(True)
+        
+    def hide_raster(self):
+        self.set_raster_visible(False)
     
     # CONTOURS
     
