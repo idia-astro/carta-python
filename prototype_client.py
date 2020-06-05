@@ -51,6 +51,10 @@ class Colormap:
             setattr(cls, colormap.upper(), colormap)
 
 
+class Scaling:
+    LINEAR, LOG, SQRT, SQUARE, POWER, GAMMA = range(6)
+
+
 class CoordinateSystem:
     pass
 
@@ -90,7 +94,7 @@ class ContourDashMode:
 
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
-# TODO: histograms
+# TODO: histograms -- also need access to urls for exporting histograms
 # TODO: preferences -- generic get and set for now
 # TODO: regions
 # TODO: add docstrings and autogenerate documentation
@@ -305,8 +309,18 @@ class Image:
         
     # STYLE
 
-    def set_colormap(self, colormap):
+    def set_colormap(self, colormap, invert=False):
         self.call_action("renderConfig.setColorMap", colormap)
+        self.call_action("renderConfig.setInverted", invert)
+        
+    def set_scaling(self, scaling, **kwargs):
+        self.call_action("renderConfig.setScaling", scaling)
+        if scaling in (Scaling.LOG, Scaling.POWER) and "alpha" in kwargs:
+            self.call_action("renderConfig.setAlpha", kwargs["alpha"])
+        elif scaling == Scaling.GAMMA and "gamma" in kwargs:
+            self.call_action("renderConfig.setGamma", kwargs["gamma"])
+        if "min" in kwargs and "max" in kwargs:
+            self.call_action("renderConfig.setCustomScale", kwargs["min"], kwargs["max"])
         
     def set_visible(self, state):
         self.call_action("renderConfig.setVisible", state)
