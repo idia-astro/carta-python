@@ -117,27 +117,30 @@ class Session:
     def call_action(self, path, *args, **kwargs):
         path, action = self.split_path(path)
         
-        logger.debug("Sending action request to backend; path: %s; action: %s; args: %s, kwargs: %s", path, action, args, kwargs)
+        logger.debug(f"Sending action request to backend; path: {path}; action: {action}; args: {args}, kwargs: {kwargs}")
         
         # I don't think this can fail
         parameters = json.dumps(args, cls=CartaEncoder)
         
-        with grpc.insecure_channel(self.uri) as channel:
-            stub = carta_service_pb2_grpc.CartaBackendStub(channel)
-            response = stub.CallAction(
-                carta_service_pb2.ActionRequest(
-                    session_id=self.session_id,
-                    path=path,
-                    action=action,
-                    parameters=parameters,
-                    async=kwargs.get("async", False)
+        try:
+            with grpc.insecure_channel(self.uri) as channel:
+                stub = carta_service_pb2_grpc.CartaBackendStub(channel)
+                response = stub.CallAction(
+                    carta_service_pb2.ActionRequest(
+                        session_id=self.session_id,
+                        path=path,
+                        action=action,
+                        parameters=parameters,
+                        async=kwargs.get("async", False)
+                    )
                 )
-            )
+        except grpc.RpcError as e:
+            raise CartaScriptingException(f"CARTA scripting action failed: {e.details()}") from None
         
-        logger.debug("Got success status: %s; message: %s; response: %s", response.success, response.message, response.response)
+        logger.debug(f"Got success status: {response.success}; message: {response.message}; response: {response.response}")
         
         if not response.success:
-            raise CartaScriptingException("CARTA scripting action failed: %s", response.message)
+            raise CartaScriptingException(f"CARTA scripting action failed: {response.message}")
         
         if response.response == '':
             return None
@@ -145,7 +148,7 @@ class Session:
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaScriptingException("Failed to decode CARTA action response.\nResponse string: %r\nError: %s", response.response, e)
+            raise CartaScriptingException(f"Failed to decode CARTA action response.\nResponse string: {repr(response.response)}\nError: {e}")
         
         return decoded_response
 
@@ -159,10 +162,10 @@ class Session:
     def image(self, image_id, file_name):
         return Image(self, image_id, file_name)
 
-    def open_image(self, path, hdu="0"):
+    def open_image(self, path, hdu=""):
         return Image.new(self, path, hdu, False)
 
-    def append_image(self, path, hdu="0"):
+    def append_image(self, path, hdu=""):
         return Image.new(self, path, hdu, True)
 
     def image_list(self):
