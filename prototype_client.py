@@ -135,7 +135,7 @@ class Session:
                     )
                 )
         except grpc.RpcError as e:
-            raise CartaScriptingException(f"CARTA scripting action failed: {e.details()}") from None
+            raise CartaScriptingException(f"CARTA scripting action failed: {e.details()}") from e
         
         logger.debug(f"Got success status: {response.success}; message: {response.message}; response: {response.response}")
         
