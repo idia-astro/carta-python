@@ -1,0 +1,3 @@
+[submodule "carta-scripting-grpc"]
+	path = carta-scripting-grpc
+	url = https://github.com/CARTAvis/carta-scripting-grpc
