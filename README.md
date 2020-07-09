@@ -7,9 +7,13 @@ It depends on the `grpcio` and `grpcio-tools` libraries, which you should instal
 
 Please use the `dev` branches of `carta-backend`, `carta-protobuf` and `carta-frontend`.
 
+The protocol buffer definitions and associated files are in a submodule which has to be loaded. Either clone the repository with `--recursive`, or load the submodule afterwards:
+
+    git submodule update --init
+
 To generate the `pb2` files, run the script provided:
 
-    cd cartavis
+    cd carta-scripting-grpc
     ./build_python.sh
     
 To perform a basic end-to-end test by opening or appending an image, you can execute the prototype client as a script with commandline parameters. Use `./prototype_client.py --help` to see options.
