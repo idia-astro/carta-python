@@ -5,7 +5,7 @@ This is a prototype of a scripting interface which uses a generic gRPC service i
 
 It depends on the `grpcio` and `grpcio-tools` libraries, which you should install with `pip`. See the [gRPC Python Quick Start instructions](https://grpc.io/docs/quickstart/python/) for more detailed information.
 
-Please use the `dev` branches of `carta-backend`, `carta-protobuf` and `carta-frontend`.
+Please use the `dev` branches of `carta-backend` and `carta-frontend`.
 
 The protocol buffer definitions and associated files are in a submodule which has to be loaded. Either clone the repository with `--recursive`, or load the submodule afterwards:
 
