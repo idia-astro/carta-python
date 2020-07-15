@@ -115,12 +115,15 @@ class Session:
         return '.'.join(parts[:-1]), parts[-1]
         
     def call_action(self, path, *args, **kwargs):
+        response_expected = kwargs.pop("response_expected", False)
         path, action = self.split_path(path)
         
         logger.debug(f"Sending action request to backend; path: {path}; action: {action}; args: {args}, kwargs: {kwargs}")
         
         # I don't think this can fail
         parameters = json.dumps(args, cls=CartaEncoder)
+        
+        carta_action_description = f"CARTA scripting action {path}.{action} called with parameters {parameters}"
         
         try:
             request_kwargs = {
@@ -137,27 +140,29 @@ class Session:
                     carta_service_pb2.ActionRequest(**request_kwargs)
                 )
         except grpc.RpcError as e:
-            raise CartaScriptingException(f"CARTA scripting action failed: {e.details()}") from e
+            raise CartaScriptingException(f"{carta_action_description} failed: {e.details()}") from e
         
         logger.debug(f"Got success status: {response.success}; message: {response.message}; response: {response.response}")
         
         if not response.success:
-            raise CartaScriptingException(f"CARTA scripting action failed: {response.message}")
+            raise CartaScriptingException(f"{carta_action_description} failed: {response.message}")
         
         if response.response == '':
+            if response_expected:
+                raise CartaScriptingException(f"{carta_action_description} expected a response, but did not receive one.")
             return None
         
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaScriptingException(f"Failed to decode CARTA action response.\nResponse string: {repr(response.response)}\nError: {e}")
+            raise CartaScriptingException(f"{carta_action_description} received a response which could not be decoded.\nResponse string: {repr(response.response)}\nError: {e}")
         
         return decoded_response
 
     def fetch_parameter(self, path):
         path, parameter = self.split_path(path)
         macro = Macro(path, parameter)
-        return self.call_action("fetchParameter", macro)
+        return self.call_action("fetchParameter", macro, response_expected=True)
     
     # IMAGES
     
@@ -234,7 +239,7 @@ class Session:
         args = ["getImageDataUrl"]
         if background_color:
             args.append(background_color)
-        return self.call_action(*args)
+        return self.call_action(*args, response_expected=True)
     
     def rendered_view_data(self, background_color=None):
         uri = self.rendered_view_url(background_color)
