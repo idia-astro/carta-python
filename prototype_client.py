@@ -123,16 +123,18 @@ class Session:
         parameters = json.dumps(args, cls=CartaEncoder)
         
         try:
+            request_kwargs = {
+                "session_id": self.session_id,
+                "path": path,
+                "action": action,
+                "parameters": parameters,
+                "async": kwargs.get("async", False)
+            }
+            
             with grpc.insecure_channel(self.uri) as channel:
                 stub = carta_service_pb2_grpc.CartaBackendStub(channel)
                 response = stub.CallAction(
-                    carta_service_pb2.ActionRequest(
-                        session_id=self.session_id,
-                        path=path,
-                        action=action,
-                        parameters=parameters,
-                        async=kwargs.get("async", False)
-                    )
+                    carta_service_pb2.ActionRequest(**request_kwargs)
                 )
         except grpc.RpcError as e:
             raise CartaScriptingException(f"CARTA scripting action failed: {e.details()}") from e
