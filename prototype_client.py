@@ -101,6 +101,14 @@ class ContourDashMode:
 # TODO: add docstrings and autogenerate documentation
 
 
+def wait(func):
+    def do_and_wait(self, *args, **kwargs):
+        return_val = func(self, *args, **kwargs)
+        self.wait_for_data()
+        return return_val
+    return do_and_wait
+
+
 class Session:    
     def __init__(self, host, port, session_id, browser=None):
         self.uri = "%s:%s" % (host, port)
@@ -164,14 +172,19 @@ class Session:
         macro = Macro(path, parameter)
         return self.call_action("fetchParameter", macro, response_expected=True)
     
+    def wait_for_data(self):
+        self.call_action("waitForImageData")
+    
     # IMAGES
     
     def image(self, image_id, file_name):
         return Image(self, image_id, file_name)
-
+    
+    @wait
     def open_image(self, path, hdu=""):
         return Image.new(self, path, hdu, False)
-
+    
+    @wait
     def append_image(self, path, hdu=""):
         return Image.new(self, path, hdu, True)
 
@@ -191,7 +204,8 @@ class Session:
         self.call_action("clearSpectralReference")
         
     # CANVAS AND OVERLAY
-        
+    
+    @wait
     def set_view_area(self, width, height):
         self.call_action("overlayStore.setViewDimension", width, height)
     
@@ -235,7 +249,6 @@ class Session:
     # SAVE IMAGE
     
     def rendered_view_url(self, background_color=None):
-        self.call_action("waitForImageData")
         args = ["getImageDataUrl"]
         if background_color:
             args.append(background_color)
@@ -276,6 +289,9 @@ class Image:
     def fetch_parameter(self, path):
         return self.session.fetch_parameter(f"{self._base_path}.{path}")
     
+    def wait_for_data(self):
+        self.session.wait_for_data()
+    
     # METADATA
 
     def directory(self):
@@ -307,14 +323,17 @@ class Image:
 
     # NAVIGATION
 
+    @wait
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
         stokes = stokes or self.fetch_parameter("requiredStokes")
         self.call_action("setChannels", channel, stokes, recursive)
 
+    @wait
     def set_center(self, x, y):
         self.call_action("setCenter", x, y)
-        
+    
+    @wait
     def set_zoom(self, zoom, absolute=True):
         self.call_action("setZoom", zoom, absolute)
         
@@ -365,6 +384,7 @@ class Image:
         if contrast is not None:
             self.call_action("contourConfig.setColormapContrast", contrast)
     
+    @wait
     def apply_contours(self):
         self.call_action("applyContours")
     
