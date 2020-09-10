@@ -4,8 +4,8 @@ from concurrent import futures
 import json
 import grpc
 
-import carta_service_pb2
-import carta_service_pb2_grpc
+from . import carta_service_pb2
+from . import carta_service_pb2_grpc
 
 
 class CartaDummyServer(carta_service_pb2_grpc.CartaBackendServicer):

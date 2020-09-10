@@ -1,4 +1,1 @@
-carta_service_pb2.py
-carta_service_pb2_grpc.py
-__pycache__
-.ipynb_checkpoints/
+examples/.ipynb_checkpoints/
