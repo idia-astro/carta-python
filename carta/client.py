@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import json
 import logging
 import posixpath
@@ -11,95 +9,15 @@ import grpc
 
 from . import carta_service_pb2
 from . import carta_service_pb2_grpc
-
-
-logger = logging.getLogger("carta_scripting")
-logger.setLevel(logging.ERROR)
-logger.addHandler(logging.StreamHandler())
-
-
-class CartaScriptingException(Exception):
-    pass
-
-
-class Macro:
-    def __init__(self, target, variable):
-        self.target = target
-        self.variable = variable
-        
-    def __repr__(self):
-        return f"Macro('{self.target}', '{self.variable}')"
-
-
-class CartaEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Macro):
-            return {"macroTarget" : obj.target, "macroVariable" : obj.variable}
-        if type(obj).__module__ == "numpy" and type(obj).__name__ == "ndarray":
-            # The condition is a workaround to avoid importing numpy
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
-
-
-class Colormap:
-    # TODO at the moment this data can only be fetched if a file is open
-    # But we can store the constants in an independent place somewhere
-    @classmethod
-    def fetch(cls, session):
-        response = session.fetch_parameter("activeFrame.renderConfig.constructor.COLOR_MAPS_ALL")
-        
-        for colormap in response:
-            setattr(cls, colormap.upper(), colormap)
-
-
-class Scaling:
-    LINEAR, LOG, SQRT, SQUARE, POWER, GAMMA = range(6)
-
-
-class CoordinateSystem:
-    pass
-
-for system in ("Auto", "Ecliptic", "FK4", "FK5", "Galactic", "ICRS"):
-    setattr(CoordinateSystem, system.upper(), system)
-
-
-class LabelType:
-    INTERNAL = "Internal"
-    EXTERNAL = "External"
-
-
-class BeamType:
-    OPEN = "Open"
-    SOLID = "Solid"
-
-
-class Color:
-    BLACK, WHITE, RED, GREEN, BLUE, TURQUOISE, VIOLET, GOLD, GRAY = range(9)
-
-
-class Overlay:
-    pass
-
-for component in ("global", "title", "grid", "border", "ticks", "axes", "numbers", "labels", "beam"):
-    setattr(Overlay, component.upper(), component)
-
-    
-class SmoothingMode:
-    NO_SMOOTHING, BLOCK_AVERAGE, GAUSSIAN_BLUR = range(3)
-    
-
-class ContourDashMode:
-    NONE = "None"
-    DASHED = "Dashed"
-    NEGATIVE_ONLY = "NegativeOnly"
-
+from constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
+from util import logger, CartaScriptingException, Macro, CartaEncoder
+from validation import validate, String, Number, Color, Enum, Boolean
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
 # TODO: histograms -- also need access to urls for exporting histograms
 # TODO: preferences -- generic get and set for now
 # TODO: regions
 # TODO: add docstrings and autogenerate documentation
-
 
 class Session:    
     def __init__(self, host, port, session_id, browser=None):
@@ -191,25 +109,30 @@ class Session:
         self.call_action("clearSpectralReference")
         
     # CANVAS AND OVERLAY
-        
+    @validate(Number(), Number())
     def set_view_area(self, width, height):
         self.call_action("overlayStore.setViewDimension", width, height)
     
+    @validate(Enum(CoordinateSystem))
     def set_coordinate_system(self, system=CoordinateSystem.AUTO):
         self.call_action("overlayStore.global.setSystem", system)
         
+    @validate(Enum(LabelType))
     def set_label_type(self, label_type):
         self.call_action("overlayStore.global.setLabelType", label_type)
         
+    @validate(Enum(PaletteColor), Enum(Overlay))
     def set_color(self, color, component=Overlay.GLOBAL):
         self.call_action(f"overlayStore.{component}.setColor", color)
         if component != Overlay.GLOBAL:
             self.call_action(f"overlayStore.{component}.setCustomColor", True)
-        
+    
+    @validate(Enum(Overlay)) 
     def clear_color(self, component):
         if component != Overlay.GLOBAL:
             self.call_action(f"overlayStore.{component}.setCustomColor", False)
  
+    @validate(Enum(Overlay), Boolean())
     def set_visible(self, component, visible):
         if component == Overlay.TICKS:
             logger.warn("Ticks cannot be shown or hidden.")
@@ -218,9 +141,11 @@ class Session:
         if component != Overlay.GLOBAL:
             self.call_action(f"overlayStore.{component}.setVisible", visible)
     
+    @validate(Enum(Overlay)) 
     def show(self, component):
         self.set_visible(component, True)
  
+    @validate(Enum(Overlay)) 
     def hide(self, component):
         self.set_visible(component, False)
             
@@ -229,11 +154,13 @@ class Session:
     
     # PROFILES (TODO)
     
+    @validate(Number(), Number()) 
     def set_cursor(self, x, y):
         self.active_frame().call_action("regionSet.regions[0].setControlPoint", 0, [x, y])
     
     # SAVE IMAGE
     
+    @validate(Color())
     def rendered_view_url(self, background_color=None):
         self.call_action("waitForImageData")
         args = ["getImageDataUrl"]
@@ -241,11 +168,13 @@ class Session:
             args.append(background_color)
         return self.call_action(*args, response_expected=True)
     
+    @validate(Color())
     def rendered_view_data(self, background_color=None):
         uri = self.rendered_view_url(background_color)
         data = uri.split(",")[1]
         return base64.b64decode(data)
     
+    @validate(String(), Color())
     def save_rendered_view(self, file_name, background_color=None):
         with open(file_name, 'wb') as f:
             f.write(self.rendered_view_data(background_color))
