@@ -4,18 +4,6 @@ import functools
 class Parameter:
     description="UNKNOWN"
     
-    def _assert_length(self, params, number):
-        if len(params) != number:
-            raise ValueError(f"expected {number} parameters but got {len(params)}.")
-        
-    def _assert_percentage(self, param):
-        if not param.endswith("%") or not 0 <= float(param[:-1]) <= 100:
-            raise ValueError(f"{param} is not a valid percentage.")
-        
-    def _assert_between(self, param, min, max):
-        if not min <= float(param) <= max:
-            raise ValueError(f"{param} is not a number between {min} and {max}.")
-    
     def validate(self, value):
         raise NotImplementedError
 
@@ -140,6 +128,18 @@ COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige
 
 class TupleColor(Parameter):
     description = "an HTML color tuple"
+    
+    def _assert_length(self, params, number):
+        if len(params) != number:
+            raise ValueError(f"expected {number} parameters but got {len(params)}.")
+        
+    def _assert_percentage(self, param):
+        if not param.endswith("%") or not 0 <= float(param[:-1]) <= 100:
+            raise ValueError(f"{param} is not a valid percentage.")
+        
+    def _assert_between(self, param, min, max):
+        if not min <= float(param) <= max:
+            raise ValueError(f"{param} is not a number between {min} and {max}.")
     
     def _validate_rgb(self, params):
         self._assert_length(params, 3)
