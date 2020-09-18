@@ -6,9 +6,9 @@ import grpc
 
 from . import carta_service_pb2
 from . import carta_service_pb2_grpc
-from constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
-from util import logger, CartaScriptingException, Macro, CartaEncoder
-from validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf
+from .constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
+from .util import logger, CartaScriptingException, Macro, CartaEncoder
+from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
 # TODO: histograms -- also need access to urls for exporting histograms

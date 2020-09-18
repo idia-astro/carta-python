@@ -41,7 +41,11 @@ class Number(Parameter):
         self.max = max
         
     def validate(self, value):
-        if not isinstance(value, (int, float)):
+        # We do this instead of explicitly checking for an integer or a float
+        # so that we can include numpy types without a dependency on numpy
+        try:
+            float(value)
+        except TypeError:
             raise TypeError(f"{value} has type {type(value)} but a number was expected.")
         
         if self.min is not None and value < self.min:
@@ -190,13 +194,13 @@ class Color(Union):
         )
         super().__init__(options, "an HTML color specification")
 
-
+# We're assuming that this decorator will only be used for methods; we're skipping the first parameter
 def validate(*vargs):
     def decorator(func):
         @functools.wraps(func)
-        def newfunc(*args):
+        def newfunc(self, *args):
             for param, value in zip(vargs, args):
                 param.validate(value)
-            func(*args)
+            return func(self, *args)
         return newfunc
     return decorator
