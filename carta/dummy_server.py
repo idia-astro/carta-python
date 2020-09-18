@@ -16,7 +16,7 @@ class CartaDummyServer(carta_service_pb2_grpc.CartaBackendServicer):
         response = json.dumps({"foo": "bar"})
                 
         try:
-            parsed_params = json.loads(request.parameters)
+            json.loads(request.parameters)
             print("""GOT ACTION REQUEST:
 \tSESSION ID: {}
 \tPATH: {}
@@ -31,7 +31,7 @@ class CartaDummyServer(carta_service_pb2_grpc.CartaBackendServicer):
         
         return carta_service_pb2.ActionReply(success=success, message=message, response=response)
 
-
+# TODO this needs to goin a script; also put back a client test script
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     carta_service_pb2_grpc.add_CartaBackendServicer_to_server(CartaDummyServer(), server)

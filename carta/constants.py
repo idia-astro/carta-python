@@ -34,9 +34,9 @@ class PaletteColor:
 
 
 class Overlay:
-    pass
+    BEAM = "beam.settingsForDisplay" # special case: an extra layer of indirection
 
-for component in ("global", "title", "grid", "border", "ticks", "axes", "numbers", "labels", "beam"):
+for component in ("global", "title", "grid", "border", "ticks", "axes", "numbers", "labels"):
     setattr(Overlay, component.upper(), component)
 
     

@@ -2,6 +2,8 @@ import re
 import functools
 
 class Parameter:
+    description="UNKNOWN"
+    
     def _assert_length(self, params, number):
         if len(params) != number:
             raise ValueError(f"expected {number} parameters but got {len(params)}.")
@@ -18,7 +20,9 @@ class Parameter:
         raise NotImplementedError
 
 class String(Parameter):
-    def __init__(regex=None, ignorecase=False):
+    description = "a string"
+    
+    def __init__(self, regex=None, ignorecase=False):
         self.regex = regex
         self.flags = re.IGNORECASE if ignorecase else 0
         
@@ -26,11 +30,13 @@ class String(Parameter):
         if not isinstance(value, str):
             raise TypeError(f"{value} has type {type(value)} but a string was expected.")
         
-        if regex is not None and not re.search(self.regex, value, self.flags):
+        if self.regex is not None and not re.search(self.regex, value, self.flags):
             raise ValueError(f"{value} does not match {self.regex}")
 
 class Number(Parameter):
-    def __init__(min=None, max=None):
+    description = "a number"
+    
+    def __init__(self, min=None, max=None):
         self.min = min
         self.max = max
         
@@ -45,27 +51,41 @@ class Number(Parameter):
             raise ValueError(f"{value} is larger than maximum value {self.max}.")
         
 class Boolean(Parameter):
+    description = "a boolean"
+    
     def validate(self, value):
         if value not in (0, 1):
             raise TypeError(f"{value} is not a boolean value.")
+        
+
+class NoneParameter(Parameter):
+    description = "None"
+    
+    def validate(self, value):
+        if value is not None:
+            raise ValueError(f"{value} is not None.")
+
 
 class OneOf(Parameter):
-    def __init__(self, options, normalize=None):
+    def __init__(self, *options, normalize=None):
         self.options = options
         self.normalize = normalize
+        self.description = f"one of {self.options}"
         
     def validate(self, value):
         if self.normalize is not None:
             value = self.normalize(value)
         
         if value not in self.options:
-            raise ValueError(f"{value} is not one of: {self.options}")
-        
+            raise ValueError(f"{value} is not {self.description}")
+
+
 class Union(Parameter):
-    def __init__(self, options, description):
+    def __init__(self, options, description=None):
         self.options = options
+        self.description = description or " or ".join(o.description for o in options)
         
-    def validate(value):
+    def validate(self, value):
         valid = False
         
         for option in self.options:
@@ -78,13 +98,45 @@ class Union(Parameter):
                 break
         
         if not valid:
-            raise ValueError("{value} is not a valid {self.description}.")
+            raise ValueError(f"{value} is not {self.description}.")
 
+
+class Constant(Parameter):
+    def __init__(self, clazz):
+        self.clazz = clazz
+        self.description = f"a constant property of class {self.clazz.__name__}"
+        
+    def validate(self, value):
+        properties = set(v for k, v in self.clazz.__dict__.items() if not k.startswith("__"))
+        if not value in properties:
+            raise ValueError(f"{value} is not {self.description}")
+        
+
+class NoneOr(Union):
+    def __init__(self, param):
+        options = (
+            param,
+            NoneParameter(),
+        )
+        super().__init__(options)
+
+
+class IterableOf(Parameter):
+    def __init__(self, param):
+        self.param = param
+        self.description = f"an iterable of {self.param.description}"
+    
+    def validate(self, value):
+        for v in value:
+            self.param.validate(v)
+            
 
 COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan', 'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgrey', 'darkgreen', 'darkkhaki', 'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'grey', 'green', 'greenyellow', 'honeydew', 'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan', 'lightgoldenrodyellow', 'lightgray', 'lightgrey', 'lightgreen', 'lightpink', 'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue', 'lightyellow', 'lime', 'limegreen', 'linen', 'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab', 'orange', 'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue', 'purple', 'red', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue', 'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue', 'tan', 'teal', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'white', 'whitesmoke', 'yellow', 'yellowgreen')
 
 
-class TupleColor(Parameter):    
+class TupleColor(Parameter):
+    description = "an HTML color tuple"
+    
     def _validate_rgb(self, params):
         self._assert_length(params, 3)
                 
@@ -119,7 +171,7 @@ class TupleColor(Parameter):
         
         m = re.match('(hsla?|rgba?)\((.*)\)', value)
         if m is None:
-            raise ValueError(f"{value} is not a recognised HTML color tuple.")
+            raise ValueError(f"{value} is not {self.description}.")
         
         func, params = m.groups()
         try:
@@ -131,22 +183,12 @@ class TupleColor(Parameter):
 class Color(Union):
     def __init__(self):
         options = (
-            OneOf(COLORNAMES, lambda v: v.lower()), # Named color
+            OneOf(*COLORNAMES, lambda v: v.lower()), # Named color
             String("#[0-9a-f]{6}", re.IGNORECASE), # 6-digit hex
             String("#[0-9a-f]{3}", re.IGNORECASE), # 3-digit hex
             TupleColor(), # RGB, RGBA, HSL, HSLA
         )
-        super().__init__(options, "HTML color specification")
-
-
-class Enum(Parameter):
-    def __init__(self, clazz):
-        self.clazz = clazz
-        
-    def validate(self, value):
-        properties = set(v for k, v in self.clazz.__dict__.items() if not k.startswith("__"))
-        if not value in properties:
-            raise ValueError(f"{value} is not a property of class {self.clazz.__name__}")
+        super().__init__(options, "an HTML color specification")
 
 
 def validate(*vargs):
