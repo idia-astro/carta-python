@@ -236,6 +236,8 @@ class Image:
         return self.session.fetch_parameter(f"{self._base_path}.{path}")
     
     # METADATA
+    
+    # TODO TODO TODO add a caching decorator for these?
 
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
@@ -246,6 +248,26 @@ class Image:
     def shape(self):
         info = self.fetch_parameter("frameInfo.fileInfoExtended")
         return list(reversed([info["width"], info["height"], info["depth"], info["stokes"]][:info["dimensions"]]))
+    
+    def width(self):
+        info = self.fetch_parameter("frameInfo.fileInfoExtended")
+        return info["width"]
+    
+    def height(self):
+        info = self.fetch_parameter("frameInfo.fileInfoExtended")
+        return info["height"]
+    
+    def depth(self):
+        info = self.fetch_parameter("frameInfo.fileInfoExtended")
+        return info["depth"]
+    
+    def stokes(self):
+        info = self.fetch_parameter("frameInfo.fileInfoExtended")
+        return info["stokes"]
+    
+    def ndim(self):
+        info = self.fetch_parameter("frameInfo.fileInfoExtended")
+        return info["dimensions"]
     
     # SELECTION
     

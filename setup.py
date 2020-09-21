@@ -46,6 +46,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/idia-astro/carta-python",
     packages=setuptools.find_packages(),
+    scripts=["bin/carta_test_client.py"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
