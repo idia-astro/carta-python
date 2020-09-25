@@ -1,5 +1,6 @@
 import re
 import functools
+import inspect
 
 class Parameter:
     description="UNKNOWN"
@@ -93,15 +94,11 @@ class Union(Parameter):
             raise ValueError(f"{value} is not {self.description}.")
 
 
-class Constant(Parameter):
+class Constant(OneOf):
     def __init__(self, clazz):
-        self.clazz = clazz
-        self.description = f"a constant property of class {self.clazz.__name__}"
-        
-    def validate(self, value):
-        properties = set(v for k, v in self.clazz.__dict__.items() if not k.startswith("__"))
-        if not value in properties:
-            raise ValueError(f"{value} is not {self.description}")
+        options = set(v for k, v in inspect.getmembers(clazz, lambda x:not(inspect.isroutine(x))) if not k.startswith("__"))
+        super().__init__(*options)
+        self.description = f"a constant property of class {clazz.__name__}"
         
 
 class NoneOr(Union):
