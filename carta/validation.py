@@ -1,4 +1,4 @@
-"""This module provides a collection of objects which can be used to describe permitted types and values of parameters passed to :obj:`carta.client.Session` and :obj:`carta.client.Image` methods. They are associated with methods through a decorator which performs the validation at runtime and also injects parameter descriptions into the methods' docstrings."""
+"""This module provides a collection of descriptors of the permitted types and values of parameters passed to :obj:`carta.client.Session` and :obj:`carta.client.Image` methods. They are associated with methods through a decorator which performs the validation at runtime and also injects parameter descriptions into the methods' docstrings."""
 
 import re
 import functools
@@ -11,9 +11,8 @@ class Parameter:
     
     Attributes
     ----------
-    
     description : str
-        A human-readable description of this parameter specification, to be inserted into method docstrings.
+        A human-readable description of this parameter descriptor, to be inserted into method docstrings.
     
     """
     description="UNKNOWN"
@@ -40,7 +39,6 @@ class String(Parameter):
     
     Parameters
     ----------
-    
     regex : str, optional
         A regular expression string which the parameter must match.
     ignorecase : bool, optional
@@ -48,7 +46,6 @@ class String(Parameter):
         
     Attributes
     ----------
-    
     regex : str
         A regular expression string which the parameter must match.
     flags : int
@@ -65,6 +62,10 @@ class String(Parameter):
             self.description = f"`a string matching` ``{regex}``"
         
     def validate(self, value):
+        """Check if the value is a string and if it matches a regex if one was provided.
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         if not isinstance(value, str):
             raise TypeError(f"{value} has type {type(value)} but a string was expected.")
         
@@ -72,11 +73,10 @@ class String(Parameter):
             raise ValueError(f"{value} does not match {self.regex}")
 
 class Number(Parameter):
-    """A numeric parameter. Numpy integer and floating-point types are supported as well as :obj:`int` and :obj:`float`. 
+    """An integer or floating point scalar numeric parameter. 
     
     Parameters
     ----------
-    
     min : number, optional
         The lower bound.
     max : number, optional
@@ -84,7 +84,6 @@ class Number(Parameter):
         
     Attributes
     ----------
-    
     min : number
         The lower bound.
     max : number
@@ -105,8 +104,14 @@ class Number(Parameter):
             self.description = f"a number smaller than or equal to {max}"
         
     def validate(self, value):
-        # We do this instead of explicitly checking for an integer or a float
-        # so that we can include numpy types without a dependency on numpy
+        """Check if the value is a number and falls within any bounds that were provided.
+        
+        We check the type by attempting to convert the value to `float`. We do this instead of comparing types directly to support compatible numeric types from e.g. the numpy library without having to anticipate and check for them explicitly and without introducing import dependencies.
+        
+        Both the upper and lower bound are included.
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         try:
             float(value)
         except TypeError:
@@ -119,28 +124,60 @@ class Number(Parameter):
             raise ValueError(f"{value} is larger than maximum value {self.max}.")
         
 class Boolean(Parameter):
+    """A boolean parameter."""
     description = "a boolean"
     
     def validate(self, value):
+        """Check if the value is boolean. It may be expressed as a numeric 1 or 0 value. 
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         if value not in (0, 1):
             raise TypeError(f"{value} is not a boolean value.")
         
 
 class NoneParameter(Parameter):
+    """A parameter which must be `None`. This is not intended to be used directly; it is used together with :obj:`carta.validation.Union` for optional parameters with a default value of `None`."""
     description = "None"
     
     def validate(self, value):
+        """Check if the value is `None`. 
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         if value is not None:
             raise ValueError(f"{value} is not None.")
 
 
 class OneOf(Parameter):
+    """A parameter which must be one of several discrete values.
+    
+    Parameters
+    ----------
+    *options : unpacked iterable
+        An iterable of permitted values.
+    normalize : function, optional
+        A function for applying a transformation to the value before the comparison: for example, `lambda x: x.lower()`.
+        
+    Attributes
+    ----------
+    options : iterable
+        An iterable of permitted values.
+    normalize : function, optional
+        A function for applying a transformation to the value before the comparison.
+    description : str
+        A human-readable description of the options.
+    """
     def __init__(self, *options, normalize=None):
         self.options = options
         self.normalize = normalize
         self.description = f"one of {', '.join(str(o) for o in self.options)}"
         
     def validate(self, value):
+        """Check if the value is equal to one of the provided options. If a normalization function is given, this is first used to transform the value. 
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         if self.normalize is not None:
             value = self.normalize(value)
         
@@ -149,11 +186,31 @@ class OneOf(Parameter):
 
 
 class Union(Parameter):
+    """A union of other parameter descriptors.
+    
+    Parameters
+    ----------
+    options : iterable of :obj:`carta.validation.Parameter` objects
+        An iterable of valid descriptors for this parameter
+    description : str, optional
+        A custom description. The default is generated from the descriptions of the provided options.
+        
+    Attributes
+    ----------
+    options : iterable of :obj:`carta.validation.Parameter` objects
+        An iterable of valid descriptors for this parameter
+    description : str
+        A custom description or a default generated from the descriptions of the provided options.
+    """
     def __init__(self, options, description=None):
         self.options = options
         self.description = description or " or ".join(o.description for o in options)
         
     def validate(self, value):
+        """Check if the value can be validated with one of the provided descriptors. The descriptors are evaluated in the order that they are given, and the function exits after the first successful validation.
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         valid = False
         
         for option in self.options:
@@ -170,13 +227,43 @@ class Union(Parameter):
 
 
 class Constant(OneOf):
+    """A parameter which must match a class property on the provided class. Intended for use with the constants defined in :obj:`carta.constants`.
+    
+    Parameters
+    ----------
+    clazz : class
+        The parameter must match one of the properties of this class.
+    
+    Attributes
+    ----------
+    options : iterable
+        An iterable of the permitted options.
+    description : str
+        A custom description which includes the class name.
+    """
     def __init__(self, clazz):
         options = set(v for k, v in inspect.getmembers(clazz, lambda x:not(inspect.isroutine(x))) if not k.startswith("__"))
         super().__init__(*options)
-        self.description = f"a constant property of class {clazz.__name__}"
+        if clazz.__module__ is None or clazz.__module__ == str.__class__.__module__:
+            fullname = clazz.__name__  # Avoid reporting __builtin__
+        else:
+            fullname = clazz.__module__ + '.' + clazz.__name__
+        self.description = f"a class property of :obj:`{fullname}`"
         
 
 class NoneOr(Union):
+    """A parameter which can match the given descriptor or `None`. Used for optional parameters which are `None` by default.
+    
+    Parameters
+    ----------
+    param : :obj:`carta.validation.Parameter`
+        The parameter descriptor.
+    
+    Attributes
+    ----------
+    param : :obj:`carta.validation.Parameter`
+        The parameter descriptor.
+    """
     def __init__(self, param):
         options = (
             param,
@@ -186,11 +273,29 @@ class NoneOr(Union):
 
 
 class IterableOf(Parameter):
+    """An iterable of values which must match the given descriptor.
+    
+    Parameters
+    ----------
+    param : :obj:`carta.validation.Parameter`
+        The parameter descriptor.
+    
+    Attributes
+    ----------
+    param : :obj:`carta.validation.Parameter`
+        The parameter descriptor.
+    description : str
+        A custom description which includes the descriptor name.
+    """
     def __init__(self, param):
         self.param = param
         self.description = f"an iterable of {self.param.description}"
     
     def validate(self, value):
+        """Check if each element of the iterable can be validated with the given descriptor.
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         for v in value:
             self.param.validate(v)
             
@@ -199,6 +304,7 @@ COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige
 
 
 class TupleColor(Parameter):
+    """An HTML color tuple. Not intended to be used directly; you probably want :obj:`carta.validation.Color` instead."""
     description = "an HTML color tuple"
     
     def _assert_length(self, params, number):
@@ -243,6 +349,10 @@ class TupleColor(Parameter):
         self._assert_between(params[3], 0, 1)
     
     def validate(self, value):
+        """Check if the value can be parsed as a color tuple, and validate the tuple elements.
+        
+        See :obj:`carta.validation.Parameter.validate` for general information about this method.
+        """
         value = re.sub('\s', '', value)
         
         m = re.match('(hsla?|rgba?)\((.*)\)', value)
@@ -257,6 +367,7 @@ class TupleColor(Parameter):
         
 
 class Color(Union):
+    """Any valid HTML color specification: a 3- or 6-digit hex triplet, an RBG(A) or HSL(A) tuple, or one of the 147 named colors."""
     def __init__(self):
         options = (
             OneOf(*COLORNAMES, lambda v: v.lower()), # Named color
@@ -266,8 +377,27 @@ class Color(Union):
         )
         super().__init__(options, "an HTML color specification")
 
-# We're assuming that this decorator will only be used for methods; we're skipping the first parameter
 def validate(*vargs):
+    """The function which returns the decorator used to validate method parameters.
+    
+    It is assumed that the function to be decorated is an object method and the first parameter is `self`; this parameter is therefore ignored by the decorator. The remaining parameters are validated in order using the provided descriptors.
+    
+    Functions with `*args` or `*kwargs` are not currently supported: use iterables and explicit keyword parameters instead.
+    
+    The decorator inserts the descriptions of the parameters into the docstring of the decorated function, if placeholders have been left for them in the original docstring. The descriptions are passed as positional parameters to :obj:`str.format`.
+
+    The decorated function raises a :obj:`carta.util.CartaValidationException` if one of the parameters fails to validate.
+    
+    Parameters
+    ----------
+    *vargs : unpacked iterable of :obj:`carta.validation.Parameter` objects
+        Descriptors to be used to validate the function parameters, in the same order as the parameters.
+        
+    Returns
+    -------
+    function
+        The decorator function.
+    """
     def decorator(func):
         @functools.wraps(func)
         def newfunc(self, *args):
@@ -275,6 +405,9 @@ def validate(*vargs):
                 for param, value in zip(vargs, args):
                     param.validate(value)
             except (TypeError, ValueError) as e:
+                # Strip out any documentation formatting from the descriptions
+                e = re.sub(":obj:`(.*)`", r"\1", e)
+                e = re.sub("``(.*)``", r"\1", e)
                 raise CartaValidationException(f"Invalid function parameter: {e}")
             return func(self, *args)
         

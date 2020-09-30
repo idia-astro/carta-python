@@ -134,6 +134,14 @@ class Session:
     
     @validate(Constant(CoordinateSystem))
     def set_coordinate_system(self, system=CoordinateSystem.AUTO):
+        """Set the coordinate system.
+        
+        Parameters
+        ----------
+        
+        system : {0}
+            The coordinate system.
+        """
         self.call_action("overlayStore.global.setSystem", system)
         
     @validate(Constant(LabelType))
