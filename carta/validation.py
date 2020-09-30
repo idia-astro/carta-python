@@ -1,3 +1,5 @@
+"""This module provides a collection of objects which can be used to describe permitted types and values of parameters passed to :obj:`carta.client.Session` and :obj:`carta.client.Image` methods. They are associated with methods through a decorator which performs the validation at runtime and also injects parameter descriptions into the methods' docstrings."""
+
 import re
 import functools
 import inspect
@@ -5,17 +7,62 @@ import inspect
 from .util import CartaValidationException
 
 class Parameter:
+    """The top-level class for parameter validation.
+    
+    Attributes
+    ----------
+    
+    description : str
+        A human-readable description of this parameter specification, to be inserted into method docstrings.
+    
+    """
     description="UNKNOWN"
     
     def validate(self, value):
+        """Validate the value provided.
+        
+        Parameters
+        ----------
+        value
+            The value to be validated.
+        
+        Raises
+        ------
+        TypeError
+            If the value provided is not of the correct type.
+        ValueError
+            If the value provided is of the correct type but has an invalid value.
+        """
         raise NotImplementedError
 
 class String(Parameter):
+    """A string parameter.
+    
+    Parameters
+    ----------
+    
+    regex : str, optional
+        A regular expression string which the parameter must match.
+    ignorecase : bool, optional
+        Whether the regular expression match should be case-insensitive.
+        
+    Attributes
+    ----------
+    
+    regex : str
+        A regular expression string which the parameter must match.
+    flags : int
+        The flags to use when matching the regular expression. This is set to :obj:`re.IGNORECASE` or zero.
+    description : str, optional
+        A custom description which includes the regular expression, if any.
+    """
     description = "a string"
     
     def __init__(self, regex=None, ignorecase=False):
         self.regex = regex
         self.flags = re.IGNORECASE if ignorecase else 0
+        if regex:
+            self.description = f"`a string matching` ``{regex}``"
         
     def validate(self, value):
         if not isinstance(value, str):
@@ -25,11 +72,37 @@ class String(Parameter):
             raise ValueError(f"{value} does not match {self.regex}")
 
 class Number(Parameter):
+    """A numeric parameter. Numpy integer and floating-point types are supported as well as :obj:`int` and :obj:`float`. 
+    
+    Parameters
+    ----------
+    
+    min : number, optional
+        The lower bound.
+    max : number, optional
+        The upper bound.
+        
+    Attributes
+    ----------
+    
+    min : number
+        The lower bound.
+    max : number
+        The upper bound.
+    description : str, optional
+        A custom description which includes the bounds, if any.
+    """
     description = "a number"
     
     def __init__(self, min=None, max=None):
         self.min = min
         self.max = max
+        if min is not None and max is not None:
+            self.description = f"a number between {min} and {max} (inclusive)"
+        elif min is not None:
+            self.description = f"a number greater than or equal to {min}"
+        elif max is not None:
+            self.description = f"a number smaller than or equal to {max}"
         
     def validate(self, value):
         # We do this instead of explicitly checking for an integer or a float
@@ -65,7 +138,7 @@ class OneOf(Parameter):
     def __init__(self, *options, normalize=None):
         self.options = options
         self.normalize = normalize
-        self.description = f"one of {self.options}"
+        self.description = f"one of {', '.join(str(o) for o in self.options)}"
         
     def validate(self, value):
         if self.normalize is not None:
@@ -204,5 +277,9 @@ def validate(*vargs):
             except (TypeError, ValueError) as e:
                 raise CartaValidationException(f"Invalid function parameter: {e}")
             return func(self, *args)
+        
+        if newfunc.__doc__ is not None:
+            newfunc.__doc__ = newfunc.__doc__.format(*(p.description for p in vargs))
+                    
         return newfunc
     return decorator

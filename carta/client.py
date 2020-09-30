@@ -82,13 +82,37 @@ class Session:
 
     @validate(String(), String("\d*"))
     def open_image(self, path, hdu=""):
+        """Open a new image, replacing any existing images.
+        
+        Parameters
+        ----------
+        path : {0}
+            The full path to the image file.
+        hdu : {1}
+            The HDU to select inside the file.
+        """
         return Image.new(self, path, hdu, False)
 
     @validate(String(), String("\d*"))
     def append_image(self, path, hdu=""):
+        """Append a new image, keeping any existing images.
+        
+        Parameters
+        ----------
+        path : {0}
+            The full path to the image file.
+        hdu : {1}
+            The HDU to select inside the file.
+        """
         return Image.new(self, path, hdu, True)
 
     def image_list(self):
+        """Return the list of currently open images.
+        
+        Returns
+        -------
+        list of :obj:`carta.client.Image` objects.
+        """
         return [Image(self, f["value"], f["label"]) for f in self.fetch_parameter("frameNames")]
     
     def active_frame(self):
