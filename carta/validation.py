@@ -2,6 +2,8 @@ import re
 import functools
 import inspect
 
+from .util import CartaValidationException
+
 class Parameter:
     description="UNKNOWN"
     
@@ -196,8 +198,11 @@ def validate(*vargs):
     def decorator(func):
         @functools.wraps(func)
         def newfunc(self, *args):
-            for param, value in zip(vargs, args):
-                param.validate(value)
+            try:
+                for param, value in zip(vargs, args):
+                    param.validate(value)
+            except (TypeError, ValueError) as e:
+                raise CartaValidationException(f"Invalid function parameter: {e}")
             return func(self, *args)
         return newfunc
     return decorator

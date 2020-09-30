@@ -10,10 +10,11 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
+import os
+import sys
+#sys.path.insert(0, os.path.abspath('.'))
+# We need this to build the docs from the local repository files rather than an installed copy
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 
@@ -38,6 +39,9 @@ extensions = [
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
+
+# This mocks out the external grpc dependency and the protocol buffer files which are only generated when the package is installed
+autodoc_mock_imports = ["grpc", "cartaproto"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

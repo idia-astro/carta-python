@@ -16,16 +16,16 @@ class BuildGrpc(setuptools.Command):
         grpc_tools.protoc.main([
             'grpc_tools.protoc',
             '-Icarta-scripting-grpc',
-            '--python_out=carta/',
-            '--grpc_python_out=carta/',
+            '--python_out=cartaproto/',
+            '--grpc_python_out=cartaproto/',
             'carta-scripting-grpc/carta_service.proto'
         ])
         
         # There seriously isn't a better way to fix this relative import as of time of writing
-        with open('carta/carta_service_pb2_grpc.py') as f:
+        with open('cartaproto/carta_service_pb2_grpc.py') as f:
             data = f.read()
         data = re.sub("^import carta_service_pb2", "from . import carta_service_pb2", data, flags=re.MULTILINE)
-        with open('carta/carta_service_pb2_grpc.py', 'w') as f:
+        with open('cartaproto/carta_service_pb2_grpc.py', 'w') as f:
             f.write(data)
         
 class BuildPy (build_py_orig):

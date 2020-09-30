@@ -4,8 +4,8 @@ import base64
 
 import grpc
 
-from . import carta_service_pb2
-from . import carta_service_pb2_grpc
+from cartaproto import carta_service_pb2
+from cartaproto import carta_service_pb2_grpc
 from .constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
 from .util import logger, CartaScriptingException, Macro, CartaEncoder
 from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf
@@ -16,11 +16,10 @@ from .validation import validate, String, Number, Color, Constant, Boolean, None
 # TODO: regions
 # TODO: add docstrings and autogenerate documentation
 
-class Session:    
-    def __init__(self, host, port, session_id, browser=None):
+class Session:
+    def __init__(self, host, port, session_id):
         self.uri = "%s:%s" % (host, port)
         self.session_id = session_id
-        self._browser = browser
         
     def __repr__(self):
         return f"Session(session_id={self.session_id}, uri={self.uri})"
@@ -237,7 +236,7 @@ class Image:
     
     # METADATA
     
-    # TODO TODO TODO add a caching decorator for these?
+    # TODO TODO TODO request this information once when creating the object, and cache it in attributes. Figure out how to use it for validation (e.g. number of channels). When should the cached data be invalidated? Should we cache this transparently instead?
 
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
