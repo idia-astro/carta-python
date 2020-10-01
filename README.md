@@ -15,4 +15,4 @@ Some example usage of the client as a module is shown in the Jupyter notebook pr
 
 To perform a basic end-to-end test by opening or appending an image, you can execute the prototype client as a script with commandline parameters. Use `carta_test_client.py --help` to see options.
 
-The client is under rapid development and this API should be considered experimental and subject to change depending on feedback. The current overall design principle considers session and image objects to be lightweight conduits to the frontend. They do not store state and are not guaranteed to be unique or valid connections -- it is the caller's responsibility to manage the objects and store retrieved data as required.
+The client is under rapid development and this API should be considered experimental and subject to change depending on feedback. The current overall design principle considers session and image objects to be lightweight conduits to the frontend. They store as little state as possible and are not guaranteed to be unique or valid connections -- it is the caller's responsibility to manage the objects and store retrieved data as required.

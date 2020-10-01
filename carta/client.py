@@ -7,14 +7,13 @@ import grpc
 from cartaproto import carta_service_pb2
 from cartaproto import carta_service_pb2_grpc
 from .constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
-from .util import logger, CartaScriptingException, Macro, CartaEncoder
+from .util import logger, CartaScriptingException, Macro, CartaEncoder, cached
 from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
 # TODO: histograms -- also need access to urls for exporting histograms
 # TODO: preferences -- generic get and set for now
 # TODO: regions
-# TODO: add docstrings and autogenerate documentation
 
 class Session:
     def __init__(self, host, port, session_id):
@@ -113,7 +112,7 @@ class Session:
         -------
         list of :obj:`carta.client.Image` objects.
         """
-        return [Image(self, f["value"], f["label"]) for f in self.fetch_parameter("frameNames")]
+        return Image.from_list(self, self.fetch_parameter("frameNames"))
     
     def active_frame(self):
         frame_info = self.fetch_parameter("activeFrame.frameInfo")
@@ -256,6 +255,10 @@ class Image:
         image_id = session.call_action("appendFile" if append else "openFile", directory, file_name, hdu)
         
         return cls(session, image_id, file_name)
+    
+    @classmethod
+    def from_list(cls, session, image_list):
+        return [cls(session, f["value"], f["label"].split(":")[1].strip()) for f in image_list]
         
     def __repr__(self):
         return f"{self.session.session_id}:{self.image_id}:{self.file_name}"
@@ -268,37 +271,45 @@ class Image:
     
     # METADATA
     
-    # TODO TODO TODO request this information once when creating the object, and cache it in attributes. Figure out how to use it for validation (e.g. number of channels). When should the cached data be invalidated? Should we cache this transparently instead?
-
+    @property
+    @cached
     def directory(self):
         return self.fetch_parameter("frameInfo.directory")
     
+    @property
+    @cached
     def header(self):
         return self.fetch_parameter("frameInfo.fileInfoExtended.headerEntries")
     
+    @property
+    @cached
     def shape(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return list(reversed([info["width"], info["height"], info["depth"], info["stokes"]][:info["dimensions"]]))
+        return list(reversed([self.width, self.height, self.depth, self.stokes][:self.ndim]))
     
+    @property
+    @cached
     def width(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return info["width"]
+        return self.fetch_parameter("frameInfo.fileInfoExtended.width")
     
+    @property
+    @cached
     def height(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return info["height"]
+        return self.fetch_parameter("frameInfo.fileInfoExtended.height")
     
+    @property
+    @cached
     def depth(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return info["depth"]
+        return self.fetch_parameter("frameInfo.fileInfoExtended.depth")
     
+    @property
+    @cached
     def stokes(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return info["stokes"]
+        return self.fetch_parameter("frameInfo.fileInfoExtended.stokes")
     
+    @property
+    @cached
     def ndim(self):
-        info = self.fetch_parameter("frameInfo.fileInfoExtended")
-        return info["dimensions"]
+        return self.fetch_parameter("frameInfo.fileInfoExtended.dimensions")
     
     # SELECTION
     

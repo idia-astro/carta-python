@@ -1,5 +1,6 @@
 import logging
 import json
+import functools
 
 logger = logging.getLogger("carta_scripting")
 logger.setLevel(logging.ERROR)
@@ -51,3 +52,20 @@ class CartaEncoder(json.JSONEncoder):
             # The condition is a workaround to avoid importing numpy
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
+
+
+def cached(func):
+    @functools.wraps(func)
+    def newfunc(self, *args):
+        if not hasattr(self, "_cache"):
+            self._cache = {}
+
+        if func.__name__ not in self._cache:
+            self._cache[func.__name__] = func(self, *args)
+            
+        return self._cache[func.__name__]
+    
+    if newfunc.__doc__ is not None:
+        newfunc.__doc__ = newfunc.__doc__ + "\n\nThis value is transparently cached on the parent object."
+        
+    return newfunc
