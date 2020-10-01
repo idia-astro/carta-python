@@ -8,7 +8,7 @@ from cartaproto import carta_service_pb2
 from cartaproto import carta_service_pb2_grpc
 from .constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
 from .util import logger, CartaScriptingException, Macro, CartaEncoder, cached
-from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf
+from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf, Evaluate, Attr
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
 # TODO: histograms -- also need access to urls for exporting histograms
@@ -333,7 +333,7 @@ class Image:
     # NAVIGATION
 
     # TODO: should we check the channel / stokes range, and if so, should we cache that data?
-    @validate(Number(), Number(), Boolean())
+    @validate(Evaluate(Number, 0, Attr("depth"), Number.INCLUDE_MIN), Evaluate(Number, 0, Attr("stokes"), Number.INCLUDE_MIN), Boolean())
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
         channel = channel or self.fetch_parameter("requiredChannel")
         stokes = stokes or self.fetch_parameter("requiredStokes")

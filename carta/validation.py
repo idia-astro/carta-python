@@ -17,13 +17,15 @@ class Parameter:
     """
     description="UNKNOWN"
     
-    def validate(self, value):
+    def validate(self, value, parent):
         """Validate the value provided.
         
         Parameters
         ----------
         value
             The value to be validated.
+        parent
+            The object which owns the decorated method.
         
         Raises
         ------
@@ -31,6 +33,8 @@ class Parameter:
             If the value provided is not of the correct type.
         ValueError
             If the value provided is of the correct type but has an invalid value.
+        AttributeError
+            If the check depends on an attribute on the parent object of the decorated method, and it does not exist.
         """
         raise NotImplementedError
 
@@ -61,7 +65,7 @@ class String(Parameter):
         if regex:
             self.description = f"`a string matching` ``{regex}``"
         
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value is a string and if it matches a regex if one was provided.
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -81,6 +85,8 @@ class Number(Parameter):
         The lower bound.
     max : number, optional
         The upper bound.
+    interval : int
+        A bitmask which describes whether the bounds are included or excluded. The constant attributes defined on this class should be used. By default both bounds are included.
         
     Attributes
     ----------
@@ -88,28 +94,41 @@ class Number(Parameter):
         The lower bound.
     max : number
         The upper bound.
+    min_included : bool
+        Whether the lower bound is included.
+    max_included : bool
+        Whether the upper bound is included.
     description : str, optional
         A custom description which includes the bounds, if any.
     """
     description = "a number"
     
-    def __init__(self, min=None, max=None):
+    EXCLUDE, INCLUDE_MIN, INCLUDE_MAX, INCLUDE = range(4)
+    
+    def __init__(self, min=None, max=None, interval=INCLUDE):
         self.min = min
         self.max = max
-        if min is not None and max is not None:
-            self.description = f"a number between {min} and {max} (inclusive)"
-        elif min is not None:
-            self.description = f"a number greater than or equal to {min}"
-        elif max is not None:
-            self.description = f"a number smaller than or equal to {max}"
+        self.min_included = bool(interval & self.INCLUDE_MIN)
+        self.max_included = bool(interval & self.INCLUDE_MAX)
         
-    def validate(self, value):
+        desc = ["a number"]
+        
+        if min is not None:
+            desc.append(f"greater than{' or equal to' if self.min_included else ''} {min}")
+            
+            if max is not None:
+                desc.append("and")
+        
+        if max is not None:
+            desc.append(f"smaller than{' or equal to' if self.max_included else ''} {max}")
+        
+        self.description = " ".join(desc)
+        
+    def validate(self, value, parent):
         """Check if the value is a number and falls within any bounds that were provided.
         
         We check the type by attempting to convert the value to `float`. We do this instead of comparing types directly to support compatible numeric types from e.g. the numpy library without having to anticipate and check for them explicitly and without introducing import dependencies.
-        
-        Both the upper and lower bound are included.
-        
+                
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
         """
         try:
@@ -117,17 +136,28 @@ class Number(Parameter):
         except TypeError:
             raise TypeError(f"{value} has type {type(value)} but a number was expected.")
         
-        if self.min is not None and value < self.min:
-            raise ValueError(f"{value} is smaller than minimum value {self.min}.")
+        if self.min is not None:
+            if self.min_included:
+                if value < self.min:
+                    raise ValueError(f"{value} is smaller than minimum value {self.min}.")
+            else:
+                if value <= self.min:
+                    raise ValueError(f"{value} is smaller than or equal to minimum value {self.min}.")
         
-        if self.max is not None and value > self.max:
-            raise ValueError(f"{value} is larger than maximum value {self.max}.")
+        if self.max is not None:
+            if self.max_included:
+                if value > self.max:
+                    raise ValueError(f"{value} is greater than maximum value {self.max}.")
+            else:
+                if value >= self.max:
+                    raise ValueError(f"{value} is greater than or equal to maximum value {self.max}.")
+
         
 class Boolean(Parameter):
     """A boolean parameter."""
     description = "a boolean"
     
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value is boolean. It may be expressed as a numeric 1 or 0 value. 
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -140,7 +170,7 @@ class NoneParameter(Parameter):
     """A parameter which must be `None`. This is not intended to be used directly; it is used together with :obj:`carta.validation.Union` for optional parameters with a default value of `None`."""
     description = "None"
     
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value is `None`. 
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -173,7 +203,7 @@ class OneOf(Parameter):
         self.normalize = normalize
         self.description = f"one of {', '.join(str(o) for o in self.options)}"
         
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value is equal to one of the provided options. If a normalization function is given, this is first used to transform the value. 
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -206,7 +236,7 @@ class Union(Parameter):
         self.options = options
         self.description = description or " or ".join(o.description for o in options)
         
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value can be validated with one of the provided descriptors. The descriptors are evaluated in the order that they are given, and the function exits after the first successful validation.
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -215,7 +245,7 @@ class Union(Parameter):
         
         for option in self.options:
             try:
-                option.validate(value)
+                option.validate(value, parent)
             except:
                 pass
             else:
@@ -291,13 +321,13 @@ class IterableOf(Parameter):
         self.param = param
         self.description = f"an iterable of {self.param.description}"
     
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if each element of the iterable can be validated with the given descriptor.
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
         """
         for v in value:
-            self.param.validate(v)
+            self.param.validate(v, parent)
             
 
 COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan', 'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgrey', 'darkgreen', 'darkkhaki', 'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'grey', 'green', 'greenyellow', 'honeydew', 'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan', 'lightgoldenrodyellow', 'lightgray', 'lightgrey', 'lightgreen', 'lightpink', 'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue', 'lightyellow', 'lime', 'limegreen', 'linen', 'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab', 'orange', 'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue', 'purple', 'red', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue', 'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue', 'tan', 'teal', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'white', 'whitesmoke', 'yellow', 'yellowgreen')
@@ -348,7 +378,7 @@ class TupleColor(Parameter):
         self._validate_hsl(params[:3])
         self._assert_between(params[3], 0, 1)
     
-    def validate(self, value):
+    def validate(self, value, parent):
         """Check if the value can be parsed as a color tuple, and validate the tuple elements.
         
         See :obj:`carta.validation.Parameter.validate` for general information about this method.
@@ -377,6 +407,43 @@ class Color(Union):
         )
         super().__init__(options, "an HTML color specification")
 
+
+class Attr(str):
+    """A wrapper for arguments to be passed to the :obj:`carta.validation.Evaluate` descriptor. These arguments are string names of properties on the parent object of the decorated method, which will be evaluated at runtime."""
+    pass
+
+
+class Evaluate(Parameter):
+    """A descriptor which is constructed at runtime using properties of the parent object of the decorated method.
+    
+    Parameters
+    ----------
+    paramclass : a :obj:`carta.validation.Parameter` class
+        The class of the parameter descriptor to construct.
+    *args : unpacked iterable
+        Arguments to pass to the constructor; either literals or :obj:`carta.validation.Attr` objects which will be evaluated from properties on the parent object at runtime.
+    
+    Attributes
+    ----------
+    paramclass : a :obj:`carta.validation.Parameter` class
+        The class of the parameter descriptor to construct.
+    args : iterable
+        Arguments to pass to the constructor.
+    """
+    
+    def __init__(self, paramclass, *args):
+        self.paramclass = paramclass
+        self.args = args
+        
+    def validate(self, value, parent):
+        args = list(self.args)
+        for i, arg in enumerate(args):
+            if isinstance(arg, Attr):
+                args[i] = getattr(parent, arg)
+                
+        param = self.paramclass(*args)
+        param.validate(value, parent)
+
 def validate(*vargs):
     """The function which returns the decorator used to validate method parameters.
     
@@ -385,6 +452,8 @@ def validate(*vargs):
     Functions with `*args` or `*kwargs` are not currently supported: use iterables and explicit keyword parameters instead.
     
     The decorator inserts the descriptions of the parameters into the docstring of the decorated function, if placeholders have been left for them in the original docstring. The descriptions are passed as positional parameters to :obj:`str.format`.
+    
+    The `self` parameter is passed into the validation method of each descriptor, so that checks can depend on properties to be evaluated at runtime (this is currently used by :obj:`carta.validation.Evaluate`).
 
     The decorated function raises a :obj:`carta.util.CartaValidationException` if one of the parameters fails to validate.
     
@@ -404,12 +473,13 @@ def validate(*vargs):
         def newfunc(self, *args):
             try:
                 for param, value in zip(vargs, args):
-                    param.validate(value)
-            except (TypeError, ValueError) as e:
+                    param.validate(value, self)
+            except (TypeError, ValueError, AttributeError) as e:
                 # Strip out any documentation formatting from the descriptions
-                e = re.sub(":obj:`(.*)`", r"\1", e)
-                e = re.sub("``(.*)``", r"\1", e)
-                raise CartaValidationException(f"Invalid function parameter: {e}")
+                msg = str(e)
+                msg = re.sub(":obj:`(.*)`", r"\1", msg)
+                msg = re.sub("``(.*)``", r"\1", msg)
+                raise CartaValidationException(f"Invalid function parameter: {msg}")
             return func(self, *args)
         
         if newfunc.__doc__ is not None:
