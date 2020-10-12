@@ -4,7 +4,7 @@ import re
 import functools
 import inspect
 
-from .util import CartaValidationException
+from .util import CartaValidationFailed
 
 class Parameter:
     """The top-level class for parameter validation.
@@ -184,7 +184,7 @@ class OneOf(Parameter):
     
     Parameters
     ----------
-    *options : unpacked iterable
+    *options : iterable
         An iterable of permitted values.
     normalize : function, optional
         A function for applying a transformation to the value before the comparison: for example, `lambda x: x.lower()`.
@@ -420,7 +420,7 @@ class Evaluate(Parameter):
     ----------
     paramclass : a :obj:`carta.validation.Parameter` class
         The class of the parameter descriptor to construct.
-    *args : unpacked iterable
+    *args : iterable
         Arguments to pass to the constructor; either literals or :obj:`carta.validation.Attr` objects which will be evaluated from properties on the parent object at runtime.
     
     Attributes
@@ -455,11 +455,11 @@ def validate(*vargs):
     
     The `self` parameter is passed into the validation method of each descriptor, so that checks can depend on properties to be evaluated at runtime (this is currently used by :obj:`carta.validation.Evaluate`).
 
-    The decorated function raises a :obj:`carta.util.CartaValidationException` if one of the parameters fails to validate.
+    The decorated function raises a :obj:`carta.util.CartaValidationFailed` if one of the parameters fails to validate.
     
     Parameters
     ----------
-    *vargs : unpacked iterable of :obj:`carta.validation.Parameter` objects
+    *vargs : iterable of :obj:`carta.validation.Parameter` objects
         Descriptors to be used to validate the function parameters, in the same order as the parameters.
         
     Returns
@@ -479,7 +479,7 @@ def validate(*vargs):
                 msg = str(e)
                 msg = re.sub(":obj:`(.*)`", r"\1", msg)
                 msg = re.sub("``(.*)``", r"\1", msg)
-                raise CartaValidationException(f"Invalid function parameter: {msg}")
+                raise CartaValidationFailed(f"Invalid function parameter: {msg}")
             return func(self, *args)
         
         if newfunc.__doc__ is not None:

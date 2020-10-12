@@ -1,3 +1,28 @@
+"""
+This is the main module of the CARTA Python wrapper.
+
+It comprises a `Session` class and an `Image` class. The session is instantiated with a host and port corresponding to a running CARTA backend instance, and a session ID corresponding to a running frontend instance connected to that backend. In future we hope to include an option to create a frontend session automatically in a headless browser.
+
+Image objects should not be instantiated directly, and should only be created through methods on the session object.
+
+Usage example::
+
+    session = Session("localhost", 50051, 1)
+
+    for img in session.image_list():
+        img.close()
+
+    img = session.open_image("/full/path/to/image.fits")
+    img2 = session.append_image("/path/to/another/image.fits")
+
+    img.set_channel_stokes(10, 0, True)
+    img.set_colormap(Colormap.VIRIDIS)
+
+    y, x = img.shape[-2:]
+    img.set_center(x/2, y/2)
+    img.set_zoom(4)
+"""
+
 import json
 import posixpath
 import base64
@@ -7,7 +32,7 @@ import grpc
 from cartaproto import carta_service_pb2
 from cartaproto import carta_service_pb2_grpc
 from .constants import Colormap, Scaling, CoordinateSystem, LabelType, BeamType, PaletteColor, Overlay, SmoothingMode, ContourDashMode
-from .util import logger, CartaScriptingException, Macro, CartaEncoder, cached
+from .util import logger, CartaActionFailed, CartaBadResponse, Macro, CartaEncoder, cached
 from .validation import validate, String, Number, Color, Constant, Boolean, NoneOr, IterableOf, OneOf, Evaluate, Attr
     
 # TODO: profiles -- need to wait for refactoring to make tsv and png profiles accessible
@@ -16,6 +41,28 @@ from .validation import validate, String, Number, Color, Constant, Boolean, None
 # TODO: regions
 
 class Session:
+    """This object corresponds to a CARTA frontend session.
+    
+    This class provides the core generic method for calling actions on the frontend (through the backend), as well as convenience methods which wrap this generic method and provide a more intuitive and user-friendly interface to frontend functionality associated with the session as a whole.
+    
+    The session object can be used to create image objects, which provide analogous convenience methods for functionality associated with individual images.
+    
+    Parameters
+    ----------
+    host : string
+        The address of the host where the CARTA backend is running.
+    port : number
+        The gRPC port on which the CARTA backend is listening.
+    session_id : number
+        The ID of an existing CARTA frontend session connected to this CARTA backend.
+    
+    Attributes
+    ----------
+    uri : string
+        The URI of the CARTA backend's gRPC interface, constructed from the host and port parameters.
+    session_id : number
+        The ID of the CARTA frontend session associated with this object.
+    """
     def __init__(self, host, port, session_id):
         self.uri = "%s:%s" % (host, port)
         self.session_id = session_id
@@ -24,10 +71,49 @@ class Session:
         return f"Session(session_id={self.session_id}, uri={self.uri})"
     
     def split_path(self, path):
+        """Extract a path to a frontend object store and an action from a combined path.
+        
+        Parameters
+        ----------
+        path : string
+            A dot-separated path to an action on a frontend object store.
+            
+        Returns
+        -------
+        string
+            The dot-separated path to the object store.
+        string
+            The name of the action.
+        """
         parts = path.split('.')
         return '.'.join(parts[:-1]), parts[-1]
         
     def call_action(self, path, *args, **kwargs):
+        """Call an action on the frontend through the backend's gRPC interface.
+        
+        This method is the core of the session class, and provides a generic interface for calling any action on the frontend. This is exposed as a public method to give developers the option of writing experimental functionality; wherever possible script writers should instead use the more user-friendly methods on the session and image objects which wrap this method.
+        
+        Parameters
+        ----------
+        path : string
+            The full dot-separated path to a frontend action.
+        *args
+            A variable-length list of parameters to pass to the action. :obj:`carta.util.Macro` objects may be used to refer to frontend objects which will be evaluated dynamically. This parameter list will be serialized into a JSON string with :obj:`carta.util.CartaEncoder`.
+        **kwargs
+            Arbitrary keyword arguments. At present only two are used: `async` (boolean) is passed in the gRPC message to indicate that an action is asynchronous (but this currently has no effect); and `response_expected` (boolean) indicates that the action should return a JSON object.
+        
+        Returns
+        -------
+        None or an object
+            If the action returns a JSON object, this method will return that response deserialized into a Python object.
+        
+        Raises
+        ------
+        CartaActionFailed
+            If a :obj:`grpc.RpcError` occurs, or if the gRPC request fails.
+        CartaBadResponse    
+            If a request which was expected to have a JSON response did not have one, or if a JSON response could not be decoded.
+        """
         response_expected = kwargs.pop("response_expected", False)
         path, action = self.split_path(path)
         
@@ -53,33 +139,47 @@ class Session:
                     carta_service_pb2.ActionRequest(**request_kwargs)
                 )
         except grpc.RpcError as e:
-            raise CartaScriptingException(f"{carta_action_description} failed: {e.details()}") from e
+            raise CartaActionFailed(f"{carta_action_description} failed: {e.details()}") from e
         
         logger.debug(f"Got success status: {response.success}; message: {response.message}; response: {response.response}")
         
         if not response.success:
-            raise CartaScriptingException(f"{carta_action_description} failed: {response.message}")
+            raise CartaActionFailed(f"{carta_action_description} failed: {response.message}")
         
         if response.response == '':
             if response_expected:
-                raise CartaScriptingException(f"{carta_action_description} expected a response, but did not receive one.")
+                raise CartaBadResponse(f"{carta_action_description} expected a response, but did not receive one.")
             return None
         
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaScriptingException(f"{carta_action_description} received a response which could not be decoded.\nResponse string: {repr(response.response)}\nError: {e}")
+            raise CartaBadResponse(f"{carta_action_description} received a response which could not be decoded.\nResponse string: {repr(response.response)}\nError: {e}")
         
         return decoded_response
 
-    def fetch_parameter(self, path):
+    def get_value(self, path):
+        """Get the value of an attribute from a frontend store.
+        
+        Like the `call_action` method, this is exposed in the public API but is not intended to be used directly under normal circumstances.
+        
+        Parameters
+        ----------
+        path : string
+            The full path to the attribute.
+        
+        Returns
+        -------
+        object
+            The value of the attribute, deserialized from a JSON string.
+        """
         path, parameter = self.split_path(path)
         macro = Macro(path, parameter)
         return self.call_action("fetchParameter", macro, response_expected=True)
     
     # IMAGES
 
-    @validate(String(), String("\d*"))
+    @validate(String(), String("\d+"))
     def open_image(self, path, hdu=""):
         """Open a new image, replacing any existing images.
         
@@ -92,7 +192,7 @@ class Session:
         """
         return Image.new(self, path, hdu, False)
 
-    @validate(String(), String("\d*"))
+    @validate(String(), String("\d+"))
     def append_image(self, path, hdu=""):
         """Append a new image, keeping any existing images.
         
@@ -112,23 +212,43 @@ class Session:
         -------
         list of :obj:`carta.client.Image` objects.
         """
-        return Image.from_list(self, self.fetch_parameter("frameNames"))
+        return Image.from_list(self, self.get_value("frameNames"))
     
     def active_frame(self):
-        frame_info = self.fetch_parameter("activeFrame.frameInfo")
+        """Return the currently active image.
+        
+        Returns
+        -------
+        :obj:`carta.client.Image`
+            The currently active image.
+        """
+        frame_info = self.get_value("activeFrame.frameInfo")
         image_id = frame_info["fileId"]
         file_name = frame_info["fileInfo"]["name"]
         return Image(self, image_id, file_name)
     
     def clear_spatial_reference(self):
+        """Clear the spatial reference."""
         self.call_action("clearSpatialReference")
     
     def clear_spectral_reference(self):
+        """Clear the spectral reference."""
         self.call_action("clearSpectralReference")
         
     # CANVAS AND OVERLAY
     @validate(Number(), Number())
     def set_view_area(self, width, height):
+        """Set the dimensions of the view area.
+        
+        TODO: we need a way to set the real pixel value. Simplest solution: expose the pixel ratio on the frontend and divide by it. Fractional values work as expected.
+        
+        Parameters
+        ----------
+        width : {0}
+            The new width, in pixels divided by the browser's pixel ratio.
+        height : {1}
+            The new height, in pixels divided by the browser's pixel ratio.
+        """
         self.call_action("overlayStore.setViewDimension", width, height)
     
     @validate(Constant(CoordinateSystem))
@@ -137,7 +257,6 @@ class Session:
         
         Parameters
         ----------
-        
         system : {0}
             The coordinate system.
         """
@@ -145,10 +264,28 @@ class Session:
         
     @validate(Constant(LabelType))
     def set_label_type(self, label_type):
+        """Set the label type.
+        
+        Parameters
+        ----------
+        label_type : {0}
+            The label type.
+        """
         self.call_action("overlayStore.global.setLabelType", label_type)
     
     @validate(NoneOr(String()), NoneOr(String()), NoneOr(String()))
     def set_text(self, title=None, label_x=None, label_y=None):
+        """Set custom title and/or the axis label text.
+        
+        Parameters
+        ----------
+        title : {0}
+            The title text.
+        label_x : {1}
+            The X-axis text.
+        label_y : {2}
+            The Y-axis text.
+        """
         if title is not None:
             self.call_action("overlayStore.title.setCustomTitleString", title)
             self.call_action("overlayStore.title.setCustomText", True)
@@ -160,20 +297,47 @@ class Session:
             self.call_action("overlayStore.labels.setCustomText", True)
     
     def clear_text(self):
+        """Clear all custom title and axis text."""
         self.call_action("overlayStore.title.setCustomText", False)
         self.call_action("overlayStore.labels.setCustomText", False)
     
-    # TODO can we get allowed font names from somewhere?
     @validate(OneOf(Overlay.TITLE, Overlay.NUMBERS, Overlay.LABELS), NoneOr(String()), NoneOr(Number()))
     def set_font(self, component, font=None, font_size=None):
+        """Set the font and/or font size of an overlay component.
+        
+        TODO: can we get the allowed font names from somewhere?
+        
+        Parameters
+        ----------
+        component : {0}
+            The overlay component.
+        font : {1}
+            The font name.
+        font_size : {2}
+            The font size.
+        """
         if font is not None:
             self.call_action(f"overlayStore.{component}.setFont", font)
         if font_size is not None:
             self.call_action(f"overlayStore.{component}.setFontSize", font_size)
         
-    @validate(Constant(BeamType), NoneOr(Number()), NoneOr(Number()), NoneOr(Number()))
-    def set_beam(self, beam_type, width=None, shift_x=None, shift_y=None):
-        self.call_action(f"overlayStore.{Overlay.BEAM}.setBeamType", beam_type)
+    @validate(NoneOr(Constant(BeamType)), NoneOr(Number()), NoneOr(Number()), NoneOr(Number()))
+    def set_beam(self, beam_type=None, width=None, shift_x=None, shift_y=None):
+        """Set the beam properties.
+        
+        Parameters
+        ----------
+        beam_type : {0}
+            The beam type.
+        width : {1}
+            The beam width.
+        shift_x : {2}
+            The X position.
+        shift_y : {3}
+            The Y position.
+        """
+        if beam_type is not None:
+            self.call_action(f"overlayStore.{Overlay.BEAM}.setBeamType", beam_type)
         if width is not None:
             self.call_action(f"overlayStore.{Overlay.BEAM}.setWidth", width)
         if shift_x is not None:
@@ -183,17 +347,44 @@ class Session:
         
     @validate(Constant(PaletteColor), Constant(Overlay))
     def set_color(self, color, component=Overlay.GLOBAL):
+        """Set the custom color on an overlay component, or the global color.
+                
+        Parameters
+        ----------
+        color : {0}
+            The color.
+        component : {1}
+            The overlay component.
+        """
         self.call_action(f"overlayStore.{component}.setColor", color)
         if component not in (Overlay.GLOBAL, Overlay.BEAM):
             self.call_action(f"overlayStore.{component}.setCustomColor", True)
     
     @validate(Constant(Overlay)) 
     def clear_color(self, component):
+        """Clear the custom color from an overlay component.
+        
+        Parameters
+        ----------
+        component : {0}
+            The overlay component.
+        """
         if component != Overlay.GLOBAL:
             self.call_action(f"overlayStore.{component}.setCustomColor", False)
  
     @validate(Constant(Overlay), Boolean())
     def set_visible(self, component, visible):
+        """Set the visibility of an overlay component.
+        
+        Ticks cannot be shown or hidden in AST.
+        
+        Parameters
+        ----------
+        component : {0}
+            The overlay component.
+        visible : {1}
+            The visibility state.
+        """
         if component == Overlay.TICKS:
             logger.warn("Ticks cannot be shown or hidden.")
             return
@@ -203,25 +394,63 @@ class Session:
     
     @validate(Constant(Overlay)) 
     def show(self, component):
+        """Show an overlay component.
+        
+        Parameters
+        ----------
+        component : {0}
+            The overlay component.
+        """
         self.set_visible(component, True)
  
     @validate(Constant(Overlay)) 
     def hide(self, component):
+        """Hide an overlay component.
+        
+        Parameters
+        ----------
+        component : {0}
+            The overlay component.
+        """
         self.set_visible(component, False)
             
     def toggle_labels(self):
+        """Toggle the overlay labels."""
         self.call_action("overlayStore.toggleLabels")
     
     # PROFILES (TODO)
     
     @validate(Number(), Number()) 
     def set_cursor(self, x, y):
+        """Set the curson position.
+        
+        Parameters
+        ----------
+        x : {0}
+            The X position.
+        y : {1}
+            The Y position.
+        
+        """
         self.active_frame().call_action("regionSet.regions[0].setControlPoint", 0, [x, y])
     
     # SAVE IMAGE
     
-    @validate(Color())
+    @validate(NoneOr(Color()))
     def rendered_view_url(self, background_color=None):
+        """Get a data URL of the rendered active image.
+        
+        Parameters
+        ----------
+        background_color : {0}
+            The background color. By default the background will be transparent.
+            
+        Returns
+        -------
+        string
+            A data URL for the rendered image in PNG format, base64-encoded.
+        
+        """
         self.call_action("waitForImageData")
         args = ["getImageDataUrl"]
         if background_color:
@@ -230,12 +459,34 @@ class Session:
     
     @validate(Color())
     def rendered_view_data(self, background_color=None):
+        """Get the decoded data of the rendered active image.
+        
+        Parameters
+        ----------
+        background_color : {0}
+            The background color. By default the background will be transparent.
+            
+        Returns
+        -------
+        bytes
+            The decoded PNG image data.
+        
+        """
         uri = self.rendered_view_url(background_color)
         data = uri.split(",")[1]
         return base64.b64decode(data)
     
     @validate(String(), Color())
     def save_rendered_view(self, file_name, background_color=None):
+        """Save the decoded data of the rendered active image to a file.
+        
+        Parameters
+        ----------
+        file_name : {0}
+            The name of the file.
+        background_color : {1}
+            The background color. By default the background will be transparent.
+        """
         with open(file_name, 'wb') as f:
             f.write(self.rendered_view_data(background_color))
 
@@ -266,20 +517,20 @@ class Image:
     def call_action(self, path, *args, **kwargs):
         return self.session.call_action(f"{self._base_path}.{path}", *args, **kwargs)
     
-    def fetch_parameter(self, path):
-        return self.session.fetch_parameter(f"{self._base_path}.{path}")
+    def get_value(self, path):
+        return self.session.get_value(f"{self._base_path}.{path}")
     
     # METADATA
     
     @property
     @cached
     def directory(self):
-        return self.fetch_parameter("frameInfo.directory")
+        return self.get_value("frameInfo.directory")
     
     @property
     @cached
     def header(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.headerEntries")
+        return self.get_value("frameInfo.fileInfoExtended.headerEntries")
     
     @property
     @cached
@@ -289,27 +540,28 @@ class Image:
     @property
     @cached
     def width(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.width")
+        """The width of the image."""
+        return self.get_value("frameInfo.fileInfoExtended.width")
     
     @property
     @cached
     def height(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.height")
+        return self.get_value("frameInfo.fileInfoExtended.height")
     
     @property
     @cached
     def depth(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.depth")
+        return self.get_value("frameInfo.fileInfoExtended.depth")
     
     @property
     @cached
     def stokes(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.stokes")
+        return self.get_value("frameInfo.fileInfoExtended.stokes")
     
     @property
     @cached
     def ndim(self):
-        return self.fetch_parameter("frameInfo.fileInfoExtended.dimensions")
+        return self.get_value("frameInfo.fileInfoExtended.dimensions")
     
     # SELECTION
     
@@ -335,8 +587,8 @@ class Image:
     # TODO: should we check the channel / stokes range, and if so, should we cache that data?
     @validate(Evaluate(Number, 0, Attr("depth"), Number.INCLUDE_MIN), Evaluate(Number, 0, Attr("stokes"), Number.INCLUDE_MIN), Boolean())
     def set_channel_stokes(self, channel=None, stokes=None, recursive=True):
-        channel = channel or self.fetch_parameter("requiredChannel")
-        stokes = stokes or self.fetch_parameter("requiredStokes")
+        channel = channel or self.get_value("requiredChannel")
+        stokes = stokes or self.get_value("requiredStokes")
         self.call_action("setChannels", channel, stokes, recursive)
 
     @validate(Number(), Number())

@@ -12,8 +12,18 @@ class CartaScriptingException(Exception):
     pass
 
 
-class CartaValidationException(CartaScriptingException):
+class CartaValidationFailed(CartaScriptingException):
     """An exception for parameter validation errors."""
+    pass
+
+
+class CartaActionFailed(CartaScriptingException):
+    """An exception for action failures."""
+    pass
+
+
+class CartaBadResponse(CartaScriptingException):
+    """An exception for unexpected responses."""
     pass
 
 
