@@ -1,3 +1,5 @@
+"""This module provides miscellaneous utility classes and functions used by the wrapper."""
+
 import logging
 import json
 import functools
@@ -65,6 +67,10 @@ class CartaEncoder(json.JSONEncoder):
 
 
 def cached(func):
+    """A decorator which transparently caches the return value of the decorated method on the parent object.
+    
+    This should only be used on methods with return values which are not expected to change for the lifetime of the object.
+    """
     @functools.wraps(func)
     def newfunc(self, *args):
         if not hasattr(self, "_cache"):
