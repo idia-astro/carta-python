@@ -689,6 +689,7 @@ class Image:
         self.session.call_action("setSpectralReference", self._frame)
         
     @validate(Boolean())
+    def set_spectral_matching(self, state):
         """Enable or disable spectral matching.
         
         Parameters
@@ -696,7 +697,6 @@ class Image:
         state : boolean
             The desired spectral matching state.
         """
-    def set_spectral_matching(self, state):
         self.session.call_action("setSpectralMatchingEnabled", self._frame, state)
 
     # NAVIGATION
