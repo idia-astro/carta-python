@@ -855,7 +855,7 @@ class Image:
         self.call_action("contourConfig.setColor", color)
         self.call_action("contourConfig.setColormapEnabled", False)
     
-    @validate(Constant(Colormap), NoneOr(Number), NoneOr(Number))
+    @validate(Constant(Colormap), NoneOr(Number()), NoneOr(Number()))
     def set_contour_colormap(self, colormap, bias=None, contrast=None):
         """Set the contour colormap.
         

@@ -7,15 +7,7 @@ import inspect
 from .util import CartaValidationFailed
 
 class Parameter:
-    """The top-level class for parameter validation.
-    
-    Attributes
-    ----------
-    description : str
-        A human-readable description of this parameter descriptor, to be inserted into method docstrings.
-    
-    """
-    description="UNKNOWN"
+    """The top-level class for parameter validation."""
     
     def validate(self, value, parent):
         """Validate the value provided.
@@ -37,6 +29,11 @@ class Parameter:
             If the check depends on an attribute on the parent object of the decorated method, and it does not exist.
         """
         raise NotImplementedError
+    
+    @property
+    def description(self):
+        """A human-readable description of this parameter descriptor."""
+        return "UNKNOWN"
 
 class String(Parameter):
     """A string parameter.
@@ -54,16 +51,11 @@ class String(Parameter):
         A regular expression string which the parameter must match.
     flags : int
         The flags to use when matching the regular expression. This is set to :obj:`re.IGNORECASE` or zero.
-    description : str, optional
-        A custom description which includes the regular expression, if any.
     """
-    description = "a string"
     
     def __init__(self, regex=None, ignorecase=False):
         self.regex = regex
         self.flags = re.IGNORECASE if ignorecase else 0
-        if regex:
-            self.description = f"`a string matching` ``{regex}``"
         
     def validate(self, value, parent):
         """Check if the value is a string and if it matches a regex if one was provided.
@@ -75,6 +67,12 @@ class String(Parameter):
         
         if self.regex is not None and not re.search(self.regex, value, self.flags):
             raise ValueError(f"{value} does not match {self.regex}")
+    
+    @property
+    def description(self):
+        if self.regex:
+            return f"`a string matching` ``{self.regex}``"
+        return "a string"
 
 class Number(Parameter):
     """An integer or floating point scalar numeric parameter. 
@@ -98,10 +96,7 @@ class Number(Parameter):
         Whether the lower bound is included.
     max_included : bool
         Whether the upper bound is included.
-    description : str, optional
-        A custom description which includes the bounds, if any.
     """
-    description = "a number"
     
     EXCLUDE, INCLUDE_MIN, INCLUDE_MAX, INCLUDE = range(4)
     
@@ -110,19 +105,6 @@ class Number(Parameter):
         self.max = max
         self.min_included = bool(interval & self.INCLUDE_MIN)
         self.max_included = bool(interval & self.INCLUDE_MAX)
-        
-        desc = ["a number"]
-        
-        if min is not None:
-            desc.append(f"greater than{' or equal to' if self.min_included else ''} {min}")
-            
-            if max is not None:
-                desc.append("and")
-        
-        if max is not None:
-            desc.append(f"smaller than{' or equal to' if self.max_included else ''} {max}")
-        
-        self.description = " ".join(desc)
         
     def validate(self, value, parent):
         """Check if the value is a number and falls within any bounds that were provided.
@@ -151,11 +133,25 @@ class Number(Parameter):
             else:
                 if value >= self.max:
                     raise ValueError(f"{value} is greater than or equal to maximum value {self.max}.")
-
+    
+    @property
+    def description(self):
+        desc = ["a number"]
+        
+        if self.min is not None:
+            desc.append(f"greater than{' or equal to' if self.min_included else ''} {self.min}")
+            
+            if self.max is not None:
+                desc.append("and")
+        
+        if self.max is not None:
+            desc.append(f"smaller than{' or equal to' if self.max_included else ''} {self.max}")
+        
+        return " ".join(desc)
+        
         
 class Boolean(Parameter):
     """A boolean parameter."""
-    description = "a boolean"
     
     def validate(self, value, parent):
         """Check if the value is boolean. It may be expressed as a numeric 1 or 0 value. 
@@ -165,10 +161,13 @@ class Boolean(Parameter):
         if value not in (0, 1):
             raise TypeError(f"{value} is not a boolean value.")
         
+    @property
+    def description(self):
+        return "a boolean"
+        
 
 class NoneParameter(Parameter):
     """A parameter which must be `None`. This is not intended to be used directly; it is used together with :obj:`carta.validation.Union` for optional parameters with a default value of `None`."""
-    description = "None"
     
     def validate(self, value, parent):
         """Check if the value is `None`. 
@@ -177,6 +176,10 @@ class NoneParameter(Parameter):
         """
         if value is not None:
             raise ValueError(f"{value} is not None.")
+        
+    @property
+    def description(self):
+        return "None"
 
 
 class OneOf(Parameter):
@@ -195,13 +198,10 @@ class OneOf(Parameter):
         An iterable of permitted values.
     normalize : function, optional
         A function for applying a transformation to the value before the comparison.
-    description : str
-        A human-readable description of the options.
     """
     def __init__(self, *options, normalize=None):
         self.options = options
         self.normalize = normalize
-        self.description = f"one of {', '.join(str(o) for o in self.options)}"
         
     def validate(self, value, parent):
         """Check if the value is equal to one of the provided options. If a normalization function is given, this is first used to transform the value. 
@@ -213,6 +213,10 @@ class OneOf(Parameter):
         
         if value not in self.options:
             raise ValueError(f"{value} is not {self.description}")
+        
+    @property
+    def description(self):
+        return f"one of {', '.join(str(o) for o in self.options)}"
 
 
 class Union(Parameter):
@@ -228,13 +232,11 @@ class Union(Parameter):
     Attributes
     ----------
     options : iterable of :obj:`carta.validation.Parameter` objects
-        An iterable of valid descriptors for this parameter
-    description : str
-        A custom description or a default generated from the descriptions of the provided options.
+        An iterable of valid descriptors for this parameter.
     """
     def __init__(self, options, description=None):
         self.options = options
-        self.description = description or " or ".join(o.description for o in options)
+        self._description = description
         
     def validate(self, value, parent):
         """Check if the value can be validated with one of the provided descriptors. The descriptors are evaluated in the order that they are given, and the function exits after the first successful validation.
@@ -254,6 +256,10 @@ class Union(Parameter):
         
         if not valid:
             raise ValueError(f"{value} is not {self.description}.")
+        
+    @property
+    def description(self):
+        return self._description or " or ".join(o.description for o in self.options)
 
 
 class Constant(OneOf):
@@ -268,17 +274,21 @@ class Constant(OneOf):
     ----------
     options : iterable
         An iterable of the permitted options.
-    description : str
-        A custom description which includes the class name.
+    clazz : class
+        The parameter must match one of the properties of this class.
     """
     def __init__(self, clazz):
         options = set(v for k, v in inspect.getmembers(clazz, lambda x:not(inspect.isroutine(x))) if not k.startswith("__"))
         super().__init__(*options)
-        if clazz.__module__ is None or clazz.__module__ == str.__class__.__module__:
-            fullname = clazz.__name__  # Avoid reporting __builtin__
+        self.clazz = clazz
+        
+    @property
+    def description(self):
+        if self.clazz.__module__ is None or self.clazz.__module__ == str.__class__.__module__:
+            fullname = self.clazz.__name__  # Avoid reporting __builtin__
         else:
-            fullname = clazz.__module__ + '.' + clazz.__name__
-        self.description = f"a class property of :obj:`{fullname}`"
+            fullname = self.clazz.__module__ + '.' + self.clazz.__name__
+        return f"`a class property of` :obj:`{fullname}`"
         
 
 class NoneOr(Union):
@@ -314,12 +324,9 @@ class IterableOf(Parameter):
     ----------
     param : :obj:`carta.validation.Parameter`
         The parameter descriptor.
-    description : str
-        A custom description which includes the descriptor name.
     """
     def __init__(self, param):
         self.param = param
-        self.description = f"an iterable of {self.param.description}"
     
     def validate(self, value, parent):
         """Check if each element of the iterable can be validated with the given descriptor.
@@ -328,6 +335,10 @@ class IterableOf(Parameter):
         """
         for v in value:
             self.param.validate(v, parent)
+        
+    @property
+    def description(self):
+        return f"an iterable of {self.param.description}"
             
 
 COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan', 'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgrey', 'darkgreen', 'darkkhaki', 'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon', 'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen', 'fuchsia', 'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'grey', 'green', 'greenyellow', 'honeydew', 'hotpink', 'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan', 'lightgoldenrodyellow', 'lightgray', 'lightgrey', 'lightgreen', 'lightpink', 'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue', 'lightyellow', 'lime', 'limegreen', 'linen', 'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue', 'mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'navy', 'oldlace', 'olive', 'olivedrab', 'orange', 'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'pink', 'plum', 'powderblue', 'purple', 'red', 'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue', 'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue', 'tan', 'teal', 'thistle', 'tomato', 'turquoise', 'violet', 'wheat', 'white', 'whitesmoke', 'yellow', 'yellowgreen')
@@ -335,7 +346,6 @@ COLORNAMES = ('aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige
 
 class TupleColor(Parameter):
     """An HTML color tuple. Not intended to be used directly; you probably want :obj:`carta.validation.Color` instead."""
-    description = "an HTML color tuple"
     
     def _assert_length(self, params, number):
         if len(params) != number:
@@ -395,6 +405,10 @@ class TupleColor(Parameter):
         except (TypeError, ValueError) as e:
             raise ValueError(f"{value} is not a valid {func.upper()} color tuple: {e}")
         
+    @property
+    def description(self):
+        return "an HTML color tuple"
+        
 
 class Color(Union):
     """Any valid HTML color specification: a 3- or 6-digit hex triplet, an RBG(A) or HSL(A) tuple, or one of the 147 named colors."""
@@ -443,6 +457,18 @@ class Evaluate(Parameter):
                 
         param = self.paramclass(*args)
         param.validate(value, parent)
+        
+    @property
+    def description(self):
+        args = list(self.args)
+        for i, arg in enumerate(args):
+            if isinstance(arg, Attr):
+                args[i] = f"self.{arg}"
+        
+        # This is a bit magic, and relies on the lack of any kind of type checking in the constructors
+        param = self.paramclass(*args)
+        return f"{param.description}, evaluated at runtime"
+
 
 def validate(*vargs):
     """The function which returns the decorator used to validate method parameters.
