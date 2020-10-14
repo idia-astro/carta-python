@@ -41,7 +41,7 @@ napoleon_use_param = False
 napoleon_use_ivar = True
 
 # This mocks out the external grpc dependency and the protocol buffer files which are only generated when the package is installed
-autodoc_mock_imports = ["grpc", "cartaproto"]
+autodoc_mock_imports = ["grpc", "selenium", "cartaproto"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

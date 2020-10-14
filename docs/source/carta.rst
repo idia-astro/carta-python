@@ -4,6 +4,14 @@ carta package
 Submodules
 ----------
 
+carta.browser module
+--------------------
+
+.. automodule:: carta.browser
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 carta.client module
 -------------------
 

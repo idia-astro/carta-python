@@ -1,13 +1,13 @@
 """
-This is the main module of the CARTA Python wrapper.
+This is the main module of the CARTA Python wrapper. It comprises a `Session` class and an `Image` class.
 
-It comprises a `Session` class and an `Image` class. The session is instantiated with a host and port corresponding to a running CARTA backend instance, and a session ID corresponding to a running frontend instance connected to that backend. In future we hope to include an option to create a frontend session automatically in a headless browser.
+The session object can be connected to an existing frontend session. It can also create a new session, for example in a headless browser, using a browser class from :obj:`carta.browser`. Please see that module's documentation for more information about the additional dependencies which are required for this.
 
 Image objects should not be instantiated directly, and should only be created through methods on the session object.
 
 Usage example::
 
-    session = Session("localhost", 50051, 1)
+    session = Session.connect("localhost", 50051, 1)
 
     for img in session.image_list():
         img.close()
@@ -63,9 +63,51 @@ class Session:
     session_id : number
         The ID of the CARTA frontend session associated with this object.
     """
-    def __init__(self, host, port, session_id):
+    def __init__(self, host, port, session_id, browser=None):
         self.uri = "%s:%s" % (host, port)
         self.session_id = session_id
+        
+        self._browser = browser
+    
+    @classmethod
+    def connect(cls, host, port, session_id):
+        """Connect to an existing frontend session.
+        
+        Parameters
+        ----------
+        host : string
+            The address of the host where the CARTA backend is running.
+        port : number
+            The gRPC port on which the CARTA backend is listening.
+        session_id : number
+            The ID of an existing CARTA frontend session connected to this CARTA backend.
+            
+        Returns
+        -------
+        :obj:`carta.client.Session`
+            A session object connected to the frontend session provided.
+        """
+        return cls(host, port, session_id)
+    
+    @classmethod
+    def new(cls, browser, frontend_url, grpc_port):
+        """Create a new frontend session.
+        
+        Parameters
+        ----------
+        browser : :obj:`carta.browser.Browser`
+            The browser to use to open the frontend.
+        frontend_url : string
+            The URL of the frontend.
+        grpc_port : number
+            The gRPC port on which the CARTA backend is listening. TODO: this should be deprecated when the frontend logs the gRPC port.
+            
+        Returns
+        -------
+        :obj:`carta.client.Session`
+            A session object connected to a new frontend session running in the browser provided.
+        """
+        return browser.new_session(frontend_url, grpc_port)
         
     def __repr__(self):
         return f"Session(session_id={self.session_id}, uri={self.uri})"
@@ -491,6 +533,15 @@ class Session:
         """
         with open(file_name, 'wb') as f:
             f.write(self.rendered_view_data(background_color))
+            
+    def close(self):
+        """Close the browser session, if applicable.
+        
+        If this session was created with the `new` method and a browser, close the browser session. If this session was connected to an existing external browser session, this method has no effect.
+        """
+        
+        if self._browser is not None:
+            self._browser.close()
 
 
 class Image:
