@@ -11,6 +11,8 @@ This package is not yet published on PyPi, but can be installed from the local r
 
     pip install .
 
+To create a new frontend session which is controlled by the wrapper instead of connecting to an existing frontend session, you also need to install the `selenium` Python library. You also need to make sure that your desired browser is installed, together with a corresponding web driver.
+
 Some example usage of the client as a module is shown in the Jupyter notebook provided in `examples`.
 
 To perform a basic end-to-end test by opening or appending an image, you can execute the prototype client as a script with commandline parameters. Use `carta_test_client.py --help` to see options.
