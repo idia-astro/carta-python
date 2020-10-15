@@ -1,0 +1,29 @@
+1602767058112	geckodriver	INFO	Listening on 127.0.0.1:52347
+1602767059119	mozrunner::runner	INFO	Running command: "/usr/bin/firefox" "--marionette" "-foreground" "-no-remote" "-profile" "/tmp/rust_mozprofilev99IBm"
+console.error: SearchCache: "_readCacheFile: Error reading cache file:" (new Error("", "(unknown module)"))
+1602767061176	Marionette	INFO	Listening on port 34325
+1602767061226	Marionette	WARN	TLS certificate errors will be ignored for this session
+JavaScript warning: http://localhost:3000/static/js/bundle.js, line 95556: unreachable code after return statement
+JavaScript warning: http://localhost:3000/static/js/bundle.js, line 95556: unreachable code after return statement
+1602767124122	Marionette	INFO	Stopped listening on port 34325
+1602767129105	geckodriver	INFO	Listening on 127.0.0.1:42531
+1602767129109	mozrunner::runner	INFO	Running command: "/usr/bin/firefox" "--marionette" "-foreground" "-no-remote" "-profile" "/tmp/rust_mozprofile8tQ2GZ"
+console.error: SearchCache: "_readCacheFile: Error reading cache file:" (new Error("", "(unknown module)"))
+1602767131184	Marionette	INFO	Listening on port 37349
+1602767131214	Marionette	WARN	TLS certificate errors will be ignored for this session
+JavaScript warning: http://localhost:3000/static/js/bundle.js, line 95556: unreachable code after return statement
+JavaScript warning: http://localhost:3000/static/js/bundle.js, line 95556: unreachable code after return statement
+
+###!!! [Child][RunMessage] Error: Channel closing: too late to send/recv, messages will be lost
+
+
+###!!! [Child][RunMessage] Error: Channel closing: too late to send/recv, messages will be lost
+
+1602767181774	Marionette	INFO	Stopped listening on port 37349
+1602767263914	geckodriver	INFO	Listening on 127.0.0.1:45257
+1602767263917	mozrunner::runner	INFO	Running command: "/usr/bin/firefox" "--marionette" "-foreground" "-no-remote" "-profile" "/tmp/rust_mozprofile5b7bwY"
+console.error: SearchCache: "_readCacheFile: Error reading cache file:" (new Error("", "(unknown module)"))
+1602767265828	Marionette	INFO	Listening on port 36955
+1602767265923	Marionette	WARN	TLS certificate errors will be ignored for this session
+JavaScript warning: http://localhost:3000/static/js/bundle.js, line 95556: unreachable code after return statement
+1602767272565	Marionette	INFO	Stopped listening on port 36955

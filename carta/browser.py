@@ -5,7 +5,7 @@ import time
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
 
 from .util import CartaScriptingException
 from .client import Session
@@ -56,21 +56,33 @@ class Browser:
         session_id = None
         
         start = time.time()
-        now = start
         
-        while (backend_host is None or session_id is None) and now - start < timeout:
-            for entry in self.driver.get_log('browser'):
-                message = entry["message"]
-                
-                m = re.search('"Connecting to (?:default|override) URL: wss?://(.+?):\d+"', message)
-                if m:
-                    backend_host = m.group(1)
-                else:
-                    m = re.search('"Connected with session ID (\d+)"', message)
-                    if m:
-                        session_id = int(m.group(1))
-                        
-            now = time.time()
+        while (backend_host is None or session_id is None):
+            if time.time() - start > timeout:
+                break
+            
+            try:
+                log_button = self.driver.find_element_by_id("logButton")
+            except NoSuchElementException:
+                time.sleep(1)
+                continue # retry
+            
+            try:
+                log_button.click()
+            except ElementClickInterceptedException:
+                try:
+                    self.driver.find_element_by_class_name("bp3-dialog-close-button").click()
+                except NoSuchElementException:
+                    time.sleep(1)
+                    continue # retry
+                self.driver.find_element_by_id("logButton").click()
+            
+            log_entries = self.driver.find_element_by_class_name("log-entry-list")
+            
+            m = re.search(r"Connected to server wss?://(.*?):\d+ with session ID (\d+)", log_entries.text)
+            if m:
+                backend_host = m.group(1)
+                session_id = int(m.group(2))
         
         if backend_host is None or session_id is None:
             raise CartaScriptingException("Could not parse CARTA backend host and session ID from browser console log.")
@@ -88,17 +100,16 @@ class ChromeHeadless(Browser):
         chrome_options = Options()
         chrome_options.add_argument("--use-gl=swiftshader")
         chrome_options.add_argument("--headless")
-        
-        d = DesiredCapabilities.CHROME
-        d['goog:loggingPrefs'] = { 'browser':'ALL' }
-        
-        super().__init__(webdriver.Chrome, options=chrome_options, desired_capabilities=d)
+        super().__init__(webdriver.Chrome, options=chrome_options)
 
-
-# TODO also add the option to open in a new window or tab of an existing browser:
 
 class Chrome(Browser):
-    pass # TODO
+    """Chrome or Chromium, no special options."""
+    def __init__(self):
+        super().__init__(webdriver.Chrome)
+
 
 class Firefox(Browser):
-    pass # TODO
+    """Firefox, no special options."""
+    def __init__(self):
+        super().__init__(webdriver.Firefox)
