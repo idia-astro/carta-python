@@ -68,6 +68,9 @@ class Session:
         self.session_id = session_id
         
         self._browser = browser
+        
+    def __del__(self):
+        self.close()
     
     @classmethod
     def connect(cls, host, port, session_id):
@@ -181,22 +184,26 @@ class Session:
                     carta_service_pb2.ActionRequest(**request_kwargs)
                 )
         except grpc.RpcError as e:
+            self.close()
             raise CartaActionFailed(f"{carta_action_description} failed: {e.details()}") from e
         
         logger.debug(f"Got success status: {response.success}; message: {response.message}; response: {response.response}")
         
         if not response.success:
+            self.close()
             raise CartaActionFailed(f"{carta_action_description} failed: {response.message}")
         
         if response.response == '':
             if response_expected:
+                self.close()
                 raise CartaBadResponse(f"{carta_action_description} expected a response, but did not receive one.")
             return None
         
         try:
             decoded_response = json.loads(response.response)
         except json.decoder.JSONDecodeError as e:
-            raise CartaBadResponse(f"{carta_action_description} received a response which could not be decoded.\nResponse string: {repr(response.response)}\nError: {e}")
+            self.close()
+            raise CartaBadResponse(f"{carta_action_description} received a response which could not be decoded.\nResponse string: {repr(response.response)}\nError: {e}") from e
         
         return decoded_response
 
@@ -219,6 +226,72 @@ class Session:
         macro = Macro(path, parameter)
         return self.call_action("fetchParameter", macro, response_expected=True)
     
+    # FILE BROWSING
+    
+    def resolve_file_path(self, path):
+        """Convert a file path to an absolute path.
+        
+        Parameters
+        ----------
+        path : string
+            The file path, which may be absolute or relative to the current directory.
+            
+        Returns
+        -------
+        string
+            The absolute file path, relative to the CARTA backend's root.
+        """
+        if path.startswith('/'):
+            return path
+        else:
+            return f"{self.pwd()}/{path}"
+    
+    def pwd(self):
+        """The current directory.
+        
+        Returns
+        -------
+        string
+            The session's current directory. 
+        """
+        self.call_action("fileBrowserStore.getFileList", Macro("fileBrowserStore", "startingDirectory"))
+        directory = self.get_value("fileBrowserStore.fileList.directory")
+        return f"/{directory}"
+    
+    def ls(self):
+        """The current directory listing.
+        
+        Returns
+        -------
+        list
+            The list of files and subdirectories in the session's current directory. 
+        """
+        self.call_action("fileBrowserStore.getFileList", Macro("fileBrowserStore", "startingDirectory"))
+        file_list = self.get_value("fileBrowserStore.fileList")
+        items = []
+        if "files" in file_list:
+            items.extend([f["name"] for f in file_list["files"]])
+        if "subdirectories" in file_list:
+            items.extend([f"{d}/" for d in file_list["subdirectories"]])
+        return sorted(items)
+    
+    def cd(self, path):
+        """Change the current directory
+        
+        TODO: .. is not supported. If the directory doesn't exist, the frontend attribute is set, and subsequent file list actions seem to fail silently. We attempt to recover from this and restore the attribute to its previous valid state.
+        
+        Parameters
+        ----------
+        path : string
+            The path to the new directory, which may be relative to the current directory or absolute (relative to the CARTA backend root).
+        """
+        full_path = self.resolve_file_path(path)
+        self.call_action("fileBrowserStore.saveStartingDirectory", full_path)
+        pwd = self.pwd()
+        if pwd != full_path:
+            self.call_action("fileBrowserStore.saveStartingDirectory", pwd)
+            print(f"Warning: could not change directory to {full_path}.")
+    
     # IMAGES
 
     @validate(String(), String("\d+"))
@@ -228,7 +301,7 @@ class Session:
         Parameters
         ----------
         path : {0}
-            The full path to the image file.
+            The path to the image file, either relative to the session's current directory or an absolute path relative to the CARTA backend's root directory.
         hdu : {1}
             The HDU to select inside the file.
         """
@@ -241,7 +314,7 @@ class Session:
         Parameters
         ----------
         path : {0}
-            The full path to the image file.
+            The path to the image file, either relative to the session's current directory or an absolute path relative to the CARTA backend's root directory.
         hdu : {1}
             The HDU to select inside the file.
         """
@@ -587,7 +660,7 @@ class Image:
         session : :obj:`carta.client.Session`
             The session object.
         path : string
-            The full path to the image file.
+            The path to the image file, either relative to the session's current directory or an absolute path relative to the CARTA backend's root directory.
         hdu : string
             The HDU to open.
         append : boolean
@@ -598,8 +671,11 @@ class Image:
         :obj:`carta.client.Image`
             A new image object.
         """
+        path = session.resolve_file_path(path)
         directory, file_name = posixpath.split(path)
+        saved_pwd = session.pwd()
         image_id = session.call_action("appendFile" if append else "openFile", directory, file_name, hdu)
+        session.cd(saved_pwd)
         
         return cls(session, image_id, file_name)
     

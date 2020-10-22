@@ -61,6 +61,7 @@ class Browser:
             if time.time() - start > timeout:
                 break
             
+            # This is a horrible temporary hack which should be replaced by more easily accessible elements
             try:
                 log_button = self.driver.find_element_by_id("logButton")
             except NoSuchElementException:
@@ -72,10 +73,15 @@ class Browser:
             except ElementClickInterceptedException:
                 try:
                     self.driver.find_element_by_class_name("bp3-dialog-close-button").click()
-                except NoSuchElementException:
+                except (NoSuchElementException, ElementClickInterceptedException):
                     time.sleep(1)
                     continue # retry
-                self.driver.find_element_by_id("logButton").click()
+                
+                try:
+                    log_button.click()
+                except ElementClickInterceptedException:
+                    time.sleep(1)
+                    continue # retry
             
             log_entries = self.driver.find_element_by_class_name("log-entry-list")
             
@@ -85,6 +91,7 @@ class Browser:
                 session_id = int(m.group(2))
         
         if backend_host is None or session_id is None:
+            self.close()
             raise CartaScriptingException("Could not parse CARTA backend host and session ID from browser console log.")
         
         return Session(backend_host, grpc_port, session_id, browser=self)
