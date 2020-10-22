@@ -18,11 +18,8 @@ if __name__ == '__main__':
     
     logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
-    session = Session(args.host, args.port, args.session)
-
+    session = Session.connect(args.host, args.port, args.session)
     image = session.append_image(args.image) if args.append else session.open_image(args.image)
-
-    Colormap.fetch(session)
     image.set_colormap(Colormap.VIRIDIS)
     
     logger.info(f"Image shape is {image.shape()}")

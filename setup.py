@@ -58,6 +58,7 @@ setuptools.setup(
     ],
     setup_requires=[
         "grpcio-tools>=1.26.0",
+        "google-api-python-client>=1.12.4",
     ],
     cmdclass={
         "build_py": BuildPy,
