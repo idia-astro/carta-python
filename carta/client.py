@@ -286,9 +286,10 @@ class Session:
             The path to the new directory, which may be relative to the current directory or absolute (relative to the CARTA backend root).
         """
         full_path = self.resolve_file_path(path)
+        old_pwd = self.pwd()
         self.call_action("fileBrowserStore.saveStartingDirectory", full_path)
         pwd = self.pwd()
-        if pwd != full_path:
+        if pwd == old_pwd:
             self.call_action("fileBrowserStore.saveStartingDirectory", pwd)
             print(f"Warning: could not change directory to {full_path}.")
     
