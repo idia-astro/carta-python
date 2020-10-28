@@ -5,7 +5,7 @@ import json
 import functools
 
 logger = logging.getLogger("carta_scripting")
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.WARN)
 logger.addHandler(logging.StreamHandler())
 
 

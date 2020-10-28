@@ -93,7 +93,7 @@ class Session:
         return cls(host, port, session_id)
     
     @classmethod
-    def new(cls, browser, frontend_url, grpc_port):
+    def new(cls, browser, frontend_url, **kwargs):
         """Create a new frontend session.
         
         Parameters
@@ -102,15 +102,15 @@ class Session:
             The browser to use to open the frontend.
         frontend_url : string
             The URL of the frontend.
-        grpc_port : number
-            The gRPC port on which the CARTA backend is listening. TODO: this should be deprecated when the frontend logs the gRPC port.
+        **kwargs : arbitrary keyword parameters
+            `timeout`: the number of seconds to spend retrying parsing connection information from the frontend; default: 10. `grpc_port`: the gRPC port on which the CARTA backend is listening; only used when connecting to legacy CARTA versions. `force_legacy`: assume a legacy CARTA version and use only the legacy connection method. By default the newer method is attempted first until it times out, and then the legacy method is attempted until it times out.
             
         Returns
         -------
         :obj:`carta.client.Session`
             A session object connected to a new frontend session running in the browser provided.
         """
-        return browser.new_session(frontend_url, grpc_port)
+        return browser.new_session(frontend_url, **kwargs)
         
     def __repr__(self):
         return f"Session(session_id={self.session_id}, uri={self.uri})"
@@ -502,7 +502,7 @@ class Session:
             The visibility state.
         """
         if component == Overlay.TICKS:
-            logger.warn("Ticks cannot be shown or hidden.")
+            logger.warning("Ticks cannot be shown or hidden.")
             return
 
         if component != Overlay.GLOBAL:
