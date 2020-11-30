@@ -473,9 +473,9 @@ class Evaluate(Parameter):
 def validate(*vargs):
     """The function which returns the decorator used to validate method parameters.
     
-    It is assumed that the function to be decorated is an object method and the first parameter is `self`; this parameter is therefore ignored by the decorator. The remaining parameters are validated in order using the provided descriptors.
+    It is assumed that the function to be decorated is an object method and the first parameter is `self`; this parameter is therefore ignored by the decorator. The remaining positional parameters are validated in order using the provided descriptors. The descriptors are also combined pairwise with the parameter names in the signature of the original function to create a dictionary for validating keyword parameters.
     
-    Functions with `*args` or `*kwargs` are not currently supported: use iterables and explicit keyword parameters instead.
+    Functions with `*args` or `**kwargs` are not currently supported: use iterables and explicit keyword parameters instead.
     
     The decorator inserts the descriptions of the parameters into the docstring of the decorated function, if placeholders have been left for them in the original docstring. The descriptions are passed as positional parameters to :obj:`str.format`.
     
@@ -495,18 +495,27 @@ def validate(*vargs):
     """
         
     def decorator(func):
+        kwvargs = {k:v for (k, v) in zip(inspect.getfullargspec(func).args, vargs)}
+        
         @functools.wraps(func)
-        def newfunc(self, *args):
+        def newfunc(self, *args, **kwargs):
             try:
                 for param, value in zip(vargs, args):
                     param.validate(value, self)
+                    
+                for key, value in kwargs.items():
+                    try:
+                        param = kwvargs[key]
+                        param.validate(value, self)
+                    except KeyError:
+                        raise CartaValidationFailed(f"Unexpected keyword parameter: {key}")
             except (TypeError, ValueError, AttributeError) as e:
                 # Strip out any documentation formatting from the descriptions
                 msg = str(e)
                 msg = re.sub(":obj:`(.*)`", r"\1", msg)
                 msg = re.sub("``(.*)``", r"\1", msg)
                 raise CartaValidationFailed(f"Invalid function parameter: {msg}")
-            return func(self, *args)
+            return func(self, *args, **kwargs)
         
         if newfunc.__doc__ is not None:
             newfunc.__doc__ = newfunc.__doc__.format(*(p.description for p in vargs))

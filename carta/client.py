@@ -295,7 +295,7 @@ class Session:
     
     # IMAGES
 
-    @validate(String(), String("\d+"))
+    @validate(String(), String("\d*"))
     def open_image(self, path, hdu=""):
         """Open a new image, replacing any existing images.
         
@@ -308,7 +308,7 @@ class Session:
         """
         return Image.new(self, path, hdu, False)
 
-    @validate(String(), String("\d+"))
+    @validate(String(), String("\d*"))
     def append_image(self, path, hdu=""):
         """Append a new image, keeping any existing images.
         
